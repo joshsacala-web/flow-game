@@ -2,14 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>River Maze</title>
+<title>River Flow</title>
 
 <style>
 body {
   margin:0;
   overflow:hidden;
   background:#87ceeb;
-  font-family:Arial;
 }
 
 canvas {
@@ -28,26 +27,28 @@ canvas {
   flex-direction:column;
   background:rgba(0,0,0,0.4);
   color:white;
+  font-family:Arial;
 }
 
 #joystick {
   position:absolute;
   bottom:40px;
   left:30px;
-  width:100px;
-  height:100px;
+  width:110px;
+  height:110px;
   border-radius:50%;
-  background:rgba(255,255,255,0.2);
+  background:rgba(255,255,255,0.15);
+  backdrop-filter: blur(6px);
 }
 
 #stick {
   position:absolute;
-  width:40px;
-  height:40px;
+  width:44px;
+  height:44px;
   border-radius:50%;
   background:white;
-  left:30px;
-  top:30px;
+  left:33px;
+  top:33px;
 }
 </style>
 </head>
@@ -57,154 +58,111 @@ canvas {
 <canvas id="game"></canvas>
 
 <div id="overlay">
-  <h1>🚤 River Maze</h1>
+  <h1>🚤 River Flow</h1>
   <button onclick="startGame()">Start</button>
 </div>
 
 <div id="joystick"><div id="stick"></div></div>
 
-<!-- 🌊 calm ocean sound -->
 <audio id="waves" loop>
   <source src="https://cdn.pixabay.com/download/audio/2022/02/23/audio_4c2a0c7d74.mp3?filename=ocean-waves-112906.mp3">
 </audio>
 
 <script>
-const canvas=document.getElementById("game");
-const ctx=canvas.getContext("2d");
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
 function resize(){
-  canvas.width=window.innerWidth;
-  canvas.height=window.innerHeight;
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
 }
 resize();
-window.addEventListener("resize",resize);
+window.addEventListener("resize", resize);
 
-const size=24, cols=20, rows=20;
-let grid, player, goal;
-
-let joyX=0, joyY=0, moveTimer=0;
-
-// 🌊 water animation
-let waveOffset=0;
-
-// maze
-function generate(){
-  grid=Array.from({length:rows},()=>Array(cols).fill(1));
-
-  function carve(x,y){
-    let dirs=[[1,0],[-1,0],[0,1],[0,-1]].sort(()=>Math.random()-0.5);
-    for(let [dx,dy] of dirs){
-      let nx=x+dx*2, ny=y+dy*2;
-      if(grid[ny] && grid[ny][nx]===1){
-        grid[ny][nx]=0;
-        grid[y+dy][x+dx]=0;
-        carve(nx,ny);
-      }
-    }
-  }
-
-  player={x:1,y:1};
-  goal={x:cols-2,y:rows-2};
-
-  grid[player.y][player.x]=0;
-  carve(player.x,player.y);
-  grid[goal.y][goal.x]=0;
-}
+// boat physics
+let boat = { x: 200, y: 200, vx: 0, vy: 0 };
 
 // joystick
-const stick=document.getElementById("stick");
+let joyX = 0, joyY = 0;
+const stick = document.getElementById("stick");
+
 document.getElementById("joystick").addEventListener("touchmove", e=>{
-  let rect=e.target.getBoundingClientRect();
-  let x=e.touches[0].clientX-rect.left-50;
-  let y=e.touches[0].clientY-rect.top-50;
+  let rect = e.target.getBoundingClientRect();
+  let x = e.touches[0].clientX - rect.left - 55;
+  let y = e.touches[0].clientY - rect.top - 55;
 
-  joyX=Math.max(-1,Math.min(1,x/40));
-  joyY=Math.max(-1,Math.min(1,y/40));
+  joyX = Math.max(-1, Math.min(1, x/40));
+  joyY = Math.max(-1, Math.min(1, y/40));
 
-  stick.style.left=(50+joyX*30)+"px";
-  stick.style.top=(50+joyY*30)+"px";
+  stick.style.left = (55 + joyX*30) + "px";
+  stick.style.top  = (55 + joyY*30) + "px";
 });
 
 document.getElementById("joystick").addEventListener("touchend", ()=>{
-  joyX=0; joyY=0;
-  stick.style.left="30px";
-  stick.style.top="30px";
+  joyX = 0; joyY = 0;
+  stick.style.left="33px";
+  stick.style.top="33px";
 });
-
-// movement
-function move(){
-  if(moveTimer>0){ moveTimer--; return; }
-
-  let dx=0, dy=0;
-
-  if(Math.abs(joyX)>Math.abs(joyY)){
-    dx=joyX>0?1:-1;
-  } else if(Math.abs(joyY)>0){
-    dy=joyY>0?1:-1;
-  }
-
-  let nx=player.x+dx, ny=player.y+dy;
-
-  if((dx||dy) && grid[ny] && grid[ny][nx]===0){
-    player.x=nx;
-    player.y=ny;
-    moveTimer=6;
-  }
-}
 
 // start
 function startGame(){
-  generate();
   document.getElementById("overlay").style.display="none";
+  document.getElementById("waves").volume = 0.4;
   document.getElementById("waves").play().catch(()=>{});
 }
+
+// water animation
+let t = 0;
 
 // draw
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  let offsetX=(canvas.width-cols*size)/2;
-  let offsetY=(canvas.height-rows*size)/2;
+  t += 0.01;
 
-  // 🌊 animated water background
-  waveOffset+=0.02;
-  ctx.fillStyle="#4ecdc4";
+  // 🌊 water gradient
+  let grad = ctx.createLinearGradient(0,0,0,canvas.height);
+  grad.addColorStop(0,"#6ec6ff");
+  grad.addColorStop(1,"#00aaff");
+  ctx.fillStyle = grad;
   ctx.fillRect(0,0,canvas.width,canvas.height);
 
-  for(let y=0;y<rows;y++){
-    for(let x=0;x<cols;x++){
-      if(grid && grid[y][x]===1){
-        ctx.fillStyle="#2f4f4f"; // land
-        ctx.fillRect(offsetX+x*size,offsetY+y*size,size,size);
-      } else {
-        // water shimmer
-        let wave=Math.sin((x+y+waveOffset)*2)*2;
-        ctx.fillStyle="#00aaff";
-        ctx.fillRect(offsetX+x*size,offsetY+y*size,size,size+wave);
-      }
+  // 🌊 wave lines
+  ctx.strokeStyle = "rgba(255,255,255,0.2)";
+  for(let i=0;i<20;i++){
+    ctx.beginPath();
+    for(let x=0;x<canvas.width;x+=20){
+      let y = Math.sin(x*0.01 + t + i) * 10 + i*30;
+      ctx.lineTo(x,y);
     }
+    ctx.stroke();
   }
 
-  if(player){
-    move();
+  // 🚤 smooth physics
+  boat.vx += joyX * 0.2;
+  boat.vy += joyY * 0.2;
 
-    // 🚤 boat
-    ctx.fillStyle="white";
-    ctx.beginPath();
-    ctx.arc(offsetX+player.x*size+12,offsetY+player.y*size+12,8,0,Math.PI*2);
-    ctx.fill();
+  boat.vx *= 0.95;
+  boat.vy *= 0.95;
 
-    // goal
-    ctx.fillStyle="gold";
-    ctx.beginPath();
-    ctx.arc(offsetX+goal.x*size+12,offsetY+goal.y*size+12,6,0,Math.PI*2);
-    ctx.fill();
+  boat.x += boat.vx;
+  boat.y += boat.vy;
 
-    if(player.x===goal.x && player.y===goal.y){
-      alert("You reached the end 🌊");
-      location.reload();
-    }
-  }
+  // 🚤 draw boat
+  ctx.fillStyle = "white";
+  ctx.beginPath();
+  ctx.arc(boat.x, boat.y, 10, 0, Math.PI*2);
+  ctx.fill();
+
+  // ✨ soft vignette
+  let g = ctx.createRadialGradient(
+    canvas.width/2, canvas.height/2, 100,
+    canvas.width/2, canvas.height/2, canvas.width
+  );
+  g.addColorStop(0,"rgba(0,0,0,0)");
+  g.addColorStop(1,"rgba(0,0,0,0.3)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
 
   requestAnimationFrame(draw);
 }
