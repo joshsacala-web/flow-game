@@ -1,195 +1,222 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Heart Maze Clean</title>
+<title>Heart Maze Ultimate</title>
 
 <style>
 body {
   margin: 0;
-  background: black;
-  color: white;
-  text-align: center;
+  overflow: hidden;
+  background: radial-gradient(circle, #140010, #000);
   font-family: Arial;
+  color: white;
 }
 
-canvas {
-  display: block;
-  margin: auto;
-  background: #111;
+#ui {
+  position: absolute;
+  top: 20px;
+  width: 100%;
+  text-align: center;
 }
 
-#info {
-  margin: 10px;
+#title {
+  font-size: 26px;
+  color: #ff4d6d;
+  text-shadow: 0 0 15px #ff4d6d;
+}
+
+#msg {
+  font-size: 14px;
+  opacity: 0.8;
 }
 </style>
 </head>
 
 <body>
 
-<h2>❤️ Heart Maze</h2>
-<div id="info">Level 1</div>
-<canvas id="c" width="400" height="400"></canvas>
+<div id="ui">
+  <div id="title">❤️ HEART MAZE</div>
+  <div id="msg">Reach the glowing heart</div>
+</div>
+
+<canvas id="game" width="500" height="500"></canvas>
 
 <script>
-const canvas = document.getElementById("c");
+const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-const tile = 20;
-const cols = 20;
-const rows = 20;
+const size = 20;
+const cols = canvas.width / size;
+const rows = canvas.height / size;
 
-let level = 1;
+let time = 0;
+let gameState = "play";
+
 let player = { x: 10, y: 18 };
+let visualPlayer = { x: 10, y: 18 };
+
+let goal = { x: 10, y: 2 };
+let enemy = { x: 5, y: 10, dir: 1 };
 
 // ❤️ heart mask
-function inHeart(x,y){
+function isHeart(x, y) {
   let nx = (x - cols/2) / (cols/2);
   let ny = (y - rows/2) / (rows/2);
-  return Math.pow(nx*nx + ny*ny - 0.3, 3) - nx*nx*ny*ny*ny < 0;
+  return Math.pow(nx*nx + ny*ny - 1, 3) - nx*nx * ny*ny*ny <= 0;
 }
 
-// create empty grid
-function createGrid(){
-  let grid = [];
-  for(let y=0;y<rows;y++){
-    grid[y]=[];
-    for(let x=0;x<cols;x++){
-      grid[y][x] = 1; // wall
-    }
-  }
-  return grid;
-}
+// 🧠 SOLVABLE MAZE (simple carve path)
+let grid = Array.from({length: rows}, () => Array(cols).fill(1));
 
-// DFS maze carving
-function carveMaze(grid, x, y){
-  let dirs = [
-    [0,-2],[0,2],[-2,0],[2,0]
-  ].sort(()=>Math.random()-0.5);
+function carvePath(x, y) {
+  let dirs = [[1,0],[-1,0],[0,1],[0,-1]]
+    .sort(() => Math.random() - 0.5);
 
-  for(let [dx,dy] of dirs){
-    let nx = x+dx;
-    let ny = y+dy;
+  for (let [dx, dy] of dirs) {
+    let nx = x + dx*2;
+    let ny = y + dy*2;
 
-    if(nx>0 && ny>0 && nx<cols-1 && ny<rows-1){
-      if(grid[ny][nx]===1 && inHeart(nx,ny)){
-        grid[ny][nx]=0;
-        grid[y+dy/2][x+dx/2]=0;
-        carveMaze(grid,nx,ny);
-      }
+    if (grid[ny] && grid[ny][nx] === 1 && isHeart(nx, ny)) {
+      grid[ny][nx] = 0;
+      grid[y+dy][x+dx] = 0;
+      carvePath(nx, ny);
     }
   }
 }
 
-function generateMaze(){
-  let grid = createGrid();
-
-  // carve only inside heart
-  for(let y=0;y<rows;y++){
-    for(let x=0;x<cols;x++){
-      if(!inHeart(x,y)){
-        grid[y][x]=1;
-      }
-    }
+// init maze
+for (let y=0;y<rows;y++){
+  for (let x=0;x<cols;x++){
+    if (isHeart(x,y)) grid[y][x]=1;
   }
-
-  // start carve
-  let sx = 10, sy = 18;
-  grid[sy][sx]=0;
-  carveMaze(grid,sx,sy);
-
-  // open goal
-  grid[1][10]=0;
-
-  return grid;
 }
 
-let maze = generateMaze();
+grid[player.y][player.x]=0;
+carvePath(player.x, player.y);
+grid[goal.y][goal.x]=0;
 
+// 🎵 SOUND (simple)
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function beep(freq, dur=0.1){
+  let o = audioCtx.createOscillator();
+  let g = audioCtx.createGain();
+  o.connect(g); g.connect(audioCtx.destination);
+  o.frequency.value = freq;
+  o.start();
+  g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+  o.stop(audioCtx.currentTime + dur);
+}
+
+// controls
+document.addEventListener("keydown", e=>{
+  if (gameState !== "play") return;
+
+  let dx=0, dy=0;
+  if(e.key==="ArrowUp")dy=-1;
+  if(e.key==="ArrowDown")dy=1;
+  if(e.key==="ArrowLeft")dx=-1;
+  if(e.key==="ArrowRight")dx=1;
+
+  let nx=player.x+dx;
+  let ny=player.y+dy;
+
+  if(grid[ny] && grid[ny][nx]===0){
+    player.x=nx;
+    player.y=ny;
+    beep(400,0.05);
+  }
+});
+
+// 💀 enemy movement
+function updateEnemy(){
+  if(time % 20 < 1){
+    let nx = enemy.x + enemy.dir;
+    if(grid[enemy.y][nx]===0){
+      enemy.x = nx;
+    } else {
+      enemy.dir *= -1;
+    }
+  }
+}
+
+// draw
 function draw(){
-  ctx.clearRect(0,0,400,400);
+  time+=0.05;
 
+  ctx.fillStyle="rgba(10,0,10,0.3)";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // walls
   for(let y=0;y<rows;y++){
     for(let x=0;x<cols;x++){
-      if(maze[y][x]===1){
-        ctx.fillStyle="white";
-        ctx.fillRect(x*tile,y*tile,tile,tile);
+      if(grid[y][x]===1){
+        ctx.shadowColor="#ff4d6d";
+        ctx.shadowBlur=8;
+        ctx.fillStyle="#ff4d6d";
+        ctx.fillRect(x*size,y*size,size,size);
+        ctx.shadowBlur=0;
       }
     }
   }
 
-  // goal
-  ctx.fillStyle="lime";
-  ctx.fillRect(10*tile,1*tile,tile,tile);
+  // goal ❤️
+  ctx.shadowColor="#ff00aa";
+  ctx.shadowBlur=20;
+  ctx.fillStyle="#ff00aa";
+  ctx.beginPath();
+  ctx.arc(goal.x*size+10, goal.y*size+10, 6+Math.sin(time)*2,0,Math.PI*2);
+  ctx.fill();
+  ctx.shadowBlur=0;
+
+  // enemy 💀
+  ctx.shadowColor="#ff0000";
+  ctx.shadowBlur=15;
+  ctx.fillStyle="#ff0000";
+  ctx.fillRect(enemy.x*size+5, enemy.y*size+5,10,10);
+  ctx.shadowBlur=0;
 
   // player
-  ctx.fillStyle="cyan";
-  ctx.fillRect(player.x*tile,player.y*tile,tile,tile);
-}
+  visualPlayer.x += (player.x - visualPlayer.x)*0.2;
+  visualPlayer.y += (player.y - visualPlayer.y)*0.2;
 
-function move(dx,dy){
-  let nx = player.x+dx;
-  let ny = player.y+dy;
+  ctx.shadowColor="#00f0ff";
+  ctx.shadowBlur=20;
+  ctx.fillStyle="#00f0ff";
+  ctx.beginPath();
+  ctx.arc(
+    visualPlayer.x*size+10,
+    visualPlayer.y*size+10,
+    6+Math.sin(time*3),
+    0,Math.PI*2
+  );
+  ctx.fill();
+  ctx.shadowBlur=0;
 
-  if(nx<0||ny<0||nx>=cols||ny>=rows) return;
-
-  if(maze[ny][nx]===1){
-    reset();
-    return;
+  // collision checks
+  if(player.x===goal.x && player.y===goal.y && gameState==="play"){
+    gameState="win";
+    beep(800,0.3);
+    document.getElementById("msg").innerText="YOU WIN ❤️";
   }
 
-  player.x=nx;
-  player.y=ny;
-
-  if(nx===10 && ny===1){
-    level++;
-    nextLevel();
+  if(player.x===enemy.x && player.y===enemy.y && gameState==="play"){
+    gameState="lose";
+    beep(100,0.3);
+    document.getElementById("msg").innerText="GAME OVER 💀";
   }
-}
 
-function reset(){
-  player={x:10,y:18};
-}
-
-function nextLevel(){
-  maze = generateMaze();
-  reset();
-  document.getElementById("info").innerText = "Level " + level;
-}
-
-// keyboard
-document.addEventListener("keydown", e=>{
-  if(e.key==="ArrowUp") move(0,-1);
-  if(e.key==="ArrowDown") move(0,1);
-  if(e.key==="ArrowLeft") move(-1,0);
-  if(e.key==="ArrowRight") move(1,0);
-});
-
-// swipe
-let sx,sy;
-canvas.addEventListener("touchstart", e=>{
-  sx=e.touches[0].clientX;
-  sy=e.touches[0].clientY;
-});
-
-canvas.addEventListener("touchend", e=>{
-  let dx=e.changedTouches[0].clientX-sx;
-  let dy=e.changedTouches[0].clientY-sy;
-
-  if(Math.abs(dx)>Math.abs(dy)){
-    move(dx>0?1:-1,0);
-  } else {
-    move(0,dy>0?1:-1);
+  if(gameState==="win"){
+    ctx.fillStyle="rgba(255,0,100,0.1)";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
   }
-});
 
-setInterval(draw,60);
+  updateEnemy();
+  requestAnimationFrame(draw);
+}
 
-// 🎧 calm loop
-let audio = new Audio("https://cdn.pixabay.com/audio/2022/03/15/audio_115b9b3b3b.mp3");
-audio.loop = true;
-audio.volume = 0.3;
-audio.play().catch(()=>{});
+draw();
 </script>
 
 </body>
