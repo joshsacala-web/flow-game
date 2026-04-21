@@ -2,53 +2,36 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Heart Maze Mobile</title>
+<title>Heart Maze Final</title>
 
 <style>
 body {
   margin:0;
-  background: radial-gradient(circle, #140010, #000);
+  background:black;
   overflow:hidden;
   font-family:Arial;
-  color:white;
-  touch-action:none;
 }
 
-canvas { display:block; margin:auto; }
-
-#hud {
+canvas {
   position:absolute;
-  top:10px;
-  width:100%;
-  display:flex;
-  justify-content:space-between;
-  padding:0 15px;
-  font-size:14px;
+  top:0; left:0;
 }
 
 #overlay {
   position:absolute;
   width:100%; height:100%;
   display:flex;
-  flex-direction:column;
   justify-content:center;
   align-items:center;
+  flex-direction:column;
   background:rgba(0,0,0,0.6);
-}
-
-button {
-  margin-top:10px;
-  padding:10px 20px;
-  border:none;
-  border-radius:8px;
-  background:#ff4d6d;
   color:white;
 }
 
 #joystick {
   position:absolute;
   bottom:40px;
-  left:40px;
+  left:30px;
   width:100px;
   height:100px;
   border-radius:50%;
@@ -69,52 +52,57 @@ button {
 
 <body>
 
-<div id="hud">
-  <div id="time">0.0</div>
-  <div id="score">0</div>
-</div>
-
-<canvas id="game" width="500" height="500"></canvas>
+<canvas id="game"></canvas>
 
 <div id="overlay">
   <h1>❤️ HEART MAZE</h1>
   <button onclick="startGame()">Start</button>
 </div>
 
-<div id="joystick">
-  <div id="stick"></div>
-</div>
+<div id="joystick"><div id="stick"></div></div>
 
-<!-- 🎵 REAL ONLINE MUSIC (no upload needed) -->
-<audio id="bgMusic" loop>
-  <source src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_5c6f1b7b1b.mp3?filename=ambient-piano-110624.mp3" type="audio/mpeg">
+<audio id="music" loop>
+  <source src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_5c6f1b7b1b.mp3?filename=ambient-piano-110624.mp3">
 </audio>
 
 <script>
-const canvas=document.getElementById("game");
-const ctx=canvas.getContext("2d");
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+function resize(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener("resize", resize);
 
 const size=20, cols=25, rows=25;
 
 let grid, player, goal, enemy;
-let playerVisual;
-let startTime=0, score=0;
+let joyX=0, joyY=0;
+let moveTimer=0;
+let startTime=0;
 
-// 🎵 MUSIC (safe start)
-const music=document.getElementById("bgMusic");
+// ❤️ AUDIO
+let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let heartbeatTimer=0;
+let glowIntensity=0;
+
+// 🎵 MUSIC
+const music=document.getElementById("music");
 function startMusic(){
   music.volume=0.4;
   music.play().catch(()=>{});
 }
 
-// ❤️ heart
+// ❤️ HEART SHAPE
 function isHeart(x,y){
   let nx=(x-cols/2)/(cols/2);
   let ny=(y-rows/2)/(rows/2);
   return Math.pow(nx*nx+ny*ny-1,3)-nx*nx*ny*ny*ny<=0;
 }
 
-// maze
+// 🧠 MAZE
 function generate(){
   grid=Array.from({length:rows},()=>Array(cols).fill(1));
 
@@ -137,11 +125,9 @@ function generate(){
   grid[goal.y][goal.x]=0;
 
   enemy={x:5,y:10,dir:1};
-  playerVisual={...player};
 }
 
 // 🎮 JOYSTICK
-let joyX=0, joyY=0;
 const stick=document.getElementById("stick");
 
 document.getElementById("joystick").addEventListener("touchmove", e=>{
@@ -162,8 +148,7 @@ document.getElementById("joystick").addEventListener("touchend", ()=>{
   stick.style.top="30px";
 });
 
-// movement
-let moveTimer=0;
+// 🎮 MOVE
 function move(){
   if(moveTimer>0){ moveTimer--; return; }
 
@@ -175,7 +160,8 @@ function move(){
     dy=joyY>0?1:-1;
   }
 
-  let nx=player.x+dx, ny=player.y+dy;
+  let nx=player.x+dx;
+  let ny=player.y+dy;
 
   if((dx||dy) && grid[ny] && grid[ny][nx]===0){
     player.x=nx;
@@ -184,38 +170,84 @@ function move(){
   }
 }
 
-// start
+// ❤️ HEARTBEAT (DISTORTED)
+function playHeartbeat(speed, danger){
+  heartbeatTimer--;
+  if(heartbeatTimer>0) return;
+
+  glowIntensity=1;
+
+  let osc=audioCtx.createOscillator();
+  let gain=audioCtx.createGain();
+  let dist=audioCtx.createWaveShaper();
+
+  function curve(a){
+    let n=44100, c=new Float32Array(n);
+    for(let i=0;i<n;i++){
+      let x=i*2/n-1;
+      c[i]=(3+a)*x*20*Math.PI/(Math.PI+a*Math.abs(x));
+    }
+    return c;
+  }
+
+  dist.curve=curve(danger*5);
+
+  osc.type = danger>0.6 ? "square" : "sine";
+  osc.frequency.value = 70 + danger*40;
+
+  gain.gain.value = 0.2 + danger*0.3;
+
+  osc.connect(dist);
+  dist.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  osc.start();
+  osc.stop(audioCtx.currentTime+0.08);
+
+  heartbeatTimer = speed;
+}
+
+// 📳 VIBRATE
+function vibrate(p){
+  if(navigator.vibrate) navigator.vibrate(p);
+}
+
+// 🚀 START
 function startGame(){
   generate();
   startTime=Date.now();
   document.getElementById("overlay").style.display="none";
+
+  audioCtx.resume();
   startMusic();
 }
 
-// enemy
-function updateEnemy(){
-  if(Math.random()<0.05){
-    let nx=enemy.x+enemy.dir;
-    if(grid[enemy.y][nx]===0) enemy.x=nx;
-    else enemy.dir*=-1;
-  }
-}
-
-// draw
+// 🎨 DRAW
 function draw(){
-  ctx.clearRect(0,0,500,500);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  let time=(Date.now()-startTime)/1000;
-  score=Math.max(0,Math.floor(1000-time*50));
+  let offsetX=(canvas.width-cols*size)/2;
+  let offsetY=(canvas.height-rows*size)/2;
 
-  document.getElementById("time").innerText="Time: "+time.toFixed(1);
-  document.getElementById("score").innerText="Score: "+score;
+  let dist = player ? Math.abs(player.x-enemy.x)+Math.abs(player.y-enemy.y) : 10;
+  let danger = 1 - Math.min(dist/10,1);
+
+  playHeartbeat(Math.max(5,dist*3), danger);
+
+  glowIntensity *= 0.92;
+
+  let r=255;
+  let g=Math.floor(80*(1-danger));
+  let b=Math.floor(120*(1-danger));
+
+  ctx.fillStyle=`rgba(${r},${g},${b},${0.15*glowIntensity*(1+danger)})`;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
 
   for(let y=0;y<rows;y++){
     for(let x=0;x<cols;x++){
       if(grid && grid[y][x]===1){
         ctx.fillStyle="#ff4d6d";
-        ctx.fillRect(x*size,y*size,size,size);
+        ctx.fillRect(offsetX+x*size,offsetY+y*size,size,size);
       }
     }
   }
@@ -223,33 +255,23 @@ function draw(){
   if(player){
     move();
 
-    ctx.fillStyle="#ff00aa";
-    ctx.beginPath();
-    ctx.arc(goal.x*size+10,goal.y*size+10,6,0,Math.PI*2);
-    ctx.fill();
-
-    ctx.fillStyle="red";
-    ctx.fillRect(enemy.x*size+5,enemy.y*size+5,10,10);
-
-    playerVisual.x+=(player.x-playerVisual.x)*0.2;
-    playerVisual.y+=(player.y-playerVisual.y)*0.2;
-
     ctx.fillStyle="#00f0ff";
     ctx.beginPath();
-    ctx.arc(playerVisual.x*size+10,playerVisual.y*size+10,6,0,Math.PI*2);
+    ctx.arc(offsetX+player.x*size+10,offsetY+player.y*size+10,6,0,Math.PI*2);
     ctx.fill();
 
+    ctx.fillStyle="#ff00aa";
+    ctx.beginPath();
+    ctx.arc(offsetX+goal.x*size+10,offsetY+goal.y*size+10,6,0,Math.PI*2);
+    ctx.fill();
+
+    if(dist<3) vibrate(50);
+
     if(player.x===goal.x && player.y===goal.y){
-      alert("YOU WIN ❤️ Score: "+score);
+      vibrate([100,50,100]);
+      alert("YOU WIN ❤️");
       location.reload();
     }
-
-    if(player.x===enemy.x && player.y===enemy.y){
-      alert("GAME OVER 💀");
-      location.reload();
-    }
-
-    updateEnemy();
   }
 
   requestAnimationFrame(draw);
