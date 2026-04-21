@@ -2,38 +2,36 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Sunset River Maze</title>
-
+<title>River Flow</title>
 <style>
-body { margin:0; overflow:hidden; background:#000; }
+body { margin:0; overflow:hidden; background:#000; touch-action:none; }
 canvas { display:block; }
 
-/* joystick */
-#joystick {
+#joy {
  position:absolute;
- bottom:30px;
+ bottom:40px;
  left:50%;
  transform:translateX(-50%);
- width:110px; height:110px;
+ width:140px;height:140px;
  border-radius:50%;
- background:rgba(255,255,255,0.15);
+ background:rgba(255,255,255,0.1);
 }
 
 #stick {
  position:absolute;
- width:40px; height:40px;
+ width:60px;height:60px;
  border-radius:50%;
  background:#ffd166;
- left:35px; top:35px;
- box-shadow:0 0 15px #ffd166;
+ left:40px;top:40px;
+ box-shadow:0 0 20px #ffd166;
 }
 
 #msg {
  position:absolute;
- top:10px;
+ top:15px;
  width:100%;
  text-align:center;
- color:#ffe8c2;
+ color:#fff;
  font-family:sans-serif;
 }
 </style>
@@ -41,134 +39,98 @@ canvas { display:block; }
 
 <body>
 
-<div id="msg">Tap for calm sunset 🌅</div>
-<canvas id="game"></canvas>
-<div id="joystick"><div id="stick"></div></div>
+<div id="msg">Tap to start 🌊</div>
+<canvas id="c"></canvas>
+<div id="joy"><div id="stick"></div></div>
 
-<audio id="music" loop>
-<source src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_5c6f1b7b1b.mp3">
-</audio>
+<audio id="audio" loop></audio>
 
 <script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+c.width = innerWidth;
+c.height = innerHeight;
 
-canvas.width = innerWidth;
-canvas.height = innerHeight;
+let player = {x:100,y:100};
+let vel = {x:0,y:0};
 
-const size = 50;
-
-// river maze
-const maze = [
-[1,1,1,1,1,1,1],
-[1,0,0,0,1,0,1],
-[1,0,1,0,1,0,1],
-[1,0,1,0,0,0,1],
-[1,0,1,1,1,0,1],
-[1,0,0,0,1,0,1],
-[1,1,1,0,1,1,1],
-[1,0,0,0,0,0,1],
-[1,1,1,1,1,1,1],
-];
-
-let player = {x:1,y:1};
-let goal = {x:5,y:7};
-
-let joyX=0, joyY=0;
-let waveOffset=0;
-
-// 🎵 music
-document.body.addEventListener("click", ()=>{
- let m=document.getElementById("music");
- m.volume=0.4;
- m.play().catch(()=>{});
- document.getElementById("msg").innerText="";
-},{once:true});
+let joy = {x:0,y:0};
+const stick = document.getElementById("stick");
 
 // 🎮 joystick
-const stick=document.getElementById("stick");
+document.getElementById("joy").addEventListener("touchmove", e=>{
+ let r = e.target.getBoundingClientRect();
+ let x = e.touches[0].clientX - r.left - 70;
+ let y = e.touches[0].clientY - r.top - 70;
 
-document.getElementById("joystick").addEventListener("touchmove", e=>{
- let rect=e.target.getBoundingClientRect();
- let x=e.touches[0].clientX-rect.left-55;
- let y=e.touches[0].clientY-rect.top-55;
+ let dist = Math.hypot(x,y);
+ let max = 50;
+ if(dist>max){ x*=max/dist; y*=max/dist; }
 
- joyX=Math.max(-1,Math.min(1,x/40));
- joyY=Math.max(-1,Math.min(1,y/40));
+ joy.x = x/max;
+ joy.y = y/max;
 
- stick.style.left=(55+joyX*30)+"px";
- stick.style.top=(55+joyY*30)+"px";
+ stick.style.left = (70+x-30)+"px";
+ stick.style.top = (70+y-30)+"px";
 });
 
-document.getElementById("joystick").addEventListener("touchend", ()=>{
- joyX=0; joyY=0;
- stick.style.left="35px";
- stick.style.top="35px";
+document.getElementById("joy").addEventListener("touchend", ()=>{
+ joy.x=0; joy.y=0;
+ stick.style.left="40px";
+ stick.style.top="40px";
 });
 
-// movement
-function move(){
- let dx=0, dy=0;
+// 🎵 real working mobile audio
+let started=false;
+document.body.addEventListener("click", ()=>{
+ if(started) return;
+ started=true;
 
- if(Math.abs(joyX)>Math.abs(joyY)){
-   dx = joyX>0.5?1:joyX<-0.5?-1:0;
- } else {
-   dy = joyY>0.5?1:joyY<-0.5?-1:0;
- }
+ let a=document.getElementById("audio");
+ a.src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_5c6f1b7b1b.mp3";
+ a.volume=0.4;
+ a.play().catch(()=>{});
 
- let nx=player.x+dx;
- let ny=player.y+dy;
+ document.getElementById("msg").innerText="";
+});
 
- if(maze[ny] && maze[ny][nx]===0){
-   player.x=nx;
-   player.y=ny;
- }
-}
-
-// draw
+// 🌊 draw loop
+let t=0;
 function draw(){
+ t+=0.02;
 
- // 🌅 SKY GRADIENT BACKGROUND
- let sky = ctx.createLinearGradient(0,0,0,canvas.height);
- sky.addColorStop(0,"#ff9966");
- sky.addColorStop(0.4,"#ff5e62");
- sky.addColorStop(0.8,"#2c3e50");
- ctx.fillStyle=sky;
- ctx.fillRect(0,0,canvas.width,canvas.height);
+ // 🌅 sunset sky
+ let g = ctx.createLinearGradient(0,0,0,c.height);
+ g.addColorStop(0,"#ff9966");
+ g.addColorStop(0.5,"#ff5e62");
+ g.addColorStop(1,"#2c3e50");
+ ctx.fillStyle=g;
+ ctx.fillRect(0,0,c.width,c.height);
 
- let offX=(canvas.width-maze[0].length*size)/2;
- let offY=(canvas.height-maze.length*size)/2;
-
- waveOffset += 0.05;
-
- // draw maze
- for(let y=0;y<maze.length;y++){
-  for(let x=0;x<maze[0].length;x++){
-
-   let px = offX + x*size;
-   let py = offY + y*size;
-
-   if(maze[y][x]===1){
-     ctx.fillStyle="#5a3e2b"; // warm land
-     ctx.fillRect(px,py,size,size);
-   } else {
-     let wave = Math.sin(waveOffset + x*0.5 + y*0.3)*4;
-
-     let water = ctx.createLinearGradient(px,py,px,py+size);
-     water.addColorStop(0,"#ff9a76");
-     water.addColorStop(1,"#c44569");
-
-     ctx.fillStyle=water;
-     ctx.fillRect(px,py+wave,size,size);
-   }
-  }
+ // 🌊 water flow
+ for(let i=0;i<40;i++){
+  ctx.fillStyle="rgba(255,255,255,0.05)";
+  let y = (i*50 + (t*200)%50);
+  ctx.fillRect(0,y,c.width,20);
  }
 
- move();
+ // 🎮 movement (smooth)
+ vel.x += joy.x * 0.6;
+ vel.y += joy.y * 0.6;
 
- // 🚤 heart boat
- let cx=offX+player.x*size+size/2;
- let cy=offY+player.y*size+size/2;
+ vel.x *= 0.9;
+ vel.y *= 0.9;
+
+ player.x += vel.x;
+ player.y += vel.y;
+
+ // keep in bounds
+ player.x = Math.max(50,Math.min(c.width-50,player.x));
+ player.y = Math.max(50,Math.min(c.height-50,player.y));
+
+ // ❤️ player (centered feel)
+ let cx = c.width/2;
+ let cy = c.height/2;
 
  ctx.fillStyle="#fff";
  ctx.beginPath();
@@ -179,23 +141,11 @@ function draw(){
 
  // glow
  ctx.shadowColor="#ffd166";
- ctx.shadowBlur=20;
- ctx.fillStyle="rgba(255,209,102,0.3)";
+ ctx.shadowBlur=30;
  ctx.beginPath();
  ctx.arc(cx,cy,20,0,Math.PI*2);
  ctx.fill();
  ctx.shadowBlur=0;
-
- // dock
- ctx.fillStyle="#ffe066";
- ctx.fillRect(offX+goal.x*size,offY+goal.y*size,size,size);
-
- // win
- if(player.x===goal.x && player.y===goal.y){
-   ctx.fillStyle="white";
-   ctx.font="28px sans-serif";
-   ctx.fillText("Peaceful arrival 🌅",canvas.width/2-120,100);
- }
 
  requestAnimationFrame(draw);
 }
