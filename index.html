@@ -54,7 +54,7 @@ button{
 </head>
 <body>
 
-<div id="ui">Tap to begin</div>
+<div id="ui">Tap to start</div>
 
 <div id="menu">
   <h2 id="result"></h2>
@@ -64,6 +64,10 @@ button{
 <canvas id="c"></canvas>
 <div id="joy"><div id="stick"></div></div>
 
+<audio id="music" loop>
+<source src="https://cdn.pixabay.com/audio/2022/03/15/audio_9b1b62b9bb.mp3" type="audio/mp3">
+</audio>
+
 <script>
 const c = document.getElementById("c");
 const ctx = c.getContext("2d");
@@ -71,35 +75,32 @@ const ctx = c.getContext("2d");
 function resize(){ c.width=innerWidth; c.height=innerHeight; }
 resize(); onresize=resize;
 
-// FLOW MAZE (better pathing)
+// GUARANTEED SOLVABLE MAZE
 const maze = [
-"1111111111111111111",
-"1000000000000000001",
-"1011111111111111101",
-"1000000000000000101",
-"1111111111111110101",
-"1000000000000010101",
-"1011111111111010101",
-"1000000000001010001",
-"1011111111101011111",
-"1000000000100000001",
-"1111111110101111101",
-"1000000010101000101",
-"1011111010101010101",
-"1000001010001010001",
-"1011101011111011101",
-"1000000000000000001",
-"1111111111111111111"
+"111111111111111",
+"100000000000001",
+"101111111111101",
+"100000000000101",
+"111111111110101",
+"100000000010001",
+"101111111010111",
+"100000001010001",
+"111111101011101",
+"100000001000001",
+"101111111111101",
+"100000000000001",
+"111111111111101",
+"100000000000001",
+"111111111111111"
 ];
 
 let start={x:1.5,y:1.5};
-let goal={x:17.5,y:15.5};
+let goal={x:13.5,y:13.5};
 
-let player, trail, joy, startTime, finished;
+let player, joy, startTime, finished;
 
 function init(){
  player={...start};
- trail=[];
  joy={x:0,y:0};
  startTime=null;
  finished=false;
@@ -129,10 +130,12 @@ joyDiv.ontouchend=()=>{
  stick.style.top="30px";
 };
 
+// START + MUSIC
 document.body.onclick=()=>{
  if(!startTime){
    startTime=Date.now();
    document.getElementById("ui").innerText="";
+   document.getElementById("music").play().catch(()=>{});
  }
 };
 
@@ -144,7 +147,7 @@ function update(){
 
  if(!finished){
 
-   let speed=0.075;
+   let speed=0.07;
 
    let nx=player.x+joy.x*speed;
    if(canMove(nx,player.y)) player.x=nx;
@@ -152,11 +155,7 @@ function update(){
    let ny=player.y+joy.y*speed;
    if(canMove(player.x,ny)) player.y=ny;
 
-   // trail feedback
-   trail.push({x:player.x,y:player.y});
-   if(trail.length>15) trail.shift();
-
-   // win
+   // WIN
    if(Math.hypot(player.x-goal.x, player.y-goal.y)<0.5){
      finished=true;
 
@@ -180,25 +179,16 @@ function restart(){
 function draw(){
  ctx.clearRect(0,0,c.width,c.height);
 
- let size=Math.min(c.width/19,c.height/17);
- let ox=(c.width-size*19)/2;
- let oy=(c.height-size*17)/2;
+ let size=Math.min(c.width/15,c.height/15);
+ let ox=(c.width-size*15)/2;
+ let oy=(c.height-size*15)/2;
 
- // maze
  for(let y=0;y<maze.length;y++){
   for(let x=0;x<maze[0].length;x++){
     ctx.fillStyle = maze[y][x]=="1" ? "#000" : "#0a3d62";
     ctx.fillRect(ox+x*size,oy+y*size,size,size);
   }
  }
-
- // trail glow
- trail.forEach((p,i)=>{
-   ctx.fillStyle="rgba(255,120,120,"+(i/15)+")";
-   ctx.beginPath();
-   ctx.arc(ox+p.x*size,oy+p.y*size,3,0,Math.PI*2);
-   ctx.fill();
- });
 
  // start
  ctx.fillStyle="lime";
