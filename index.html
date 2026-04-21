@@ -25,12 +25,6 @@ canvas { display:block; }
  text-align:center;
 }
 
-button{
- padding:10px 20px;
- margin-top:10px;
- font-size:18px;
-}
-
 #joy{
  position:fixed;
  bottom:40px;
@@ -55,15 +49,13 @@ button{
 <body>
 
 <div id="ui">Tap to start</div>
-
 <div id="end">
   <h2 id="time"></h2>
-  <div id="calm"></div>
-  <button onclick="restart()">Play Again</button>
+  <h3 id="score"></h3>
+  <button onclick="restart()">Replay</button>
 </div>
 
 <canvas id="c"></canvas>
-
 <div id="joy"><div id="stick"></div></div>
 
 <audio id="music" loop>
@@ -73,52 +65,51 @@ button{
 <script>
 const c = document.getElementById("c");
 const ctx = c.getContext("2d");
-
 c.width = innerWidth;
 c.height = innerHeight;
 
-// ❤️ CREATE HEART PATH
-let path = [];
+let size = 35;
 
-function heartPath(){
- path = [];
- for(let t=0; t<Math.PI*2; t+=0.02){
-   let x = 16*Math.pow(Math.sin(t),3);
-   let y = -(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t));
-   path.push({x,y});
+// MAZE
+function generateMaze(n){
+ let grid = Array.from({length:n},()=>Array(n).fill(1));
+ function carve(x,y){
+  grid[y][x]=0;
+  let dirs=[[2,0],[-2,0],[0,2],[0,-2]]
+    .sort(()=>Math.random()-0.3);
+  for(let [dx,dy] of dirs){
+    let nx=x+dx, ny=y+dy;
+    if(ny>0&&ny<n&&nx>0&&nx<n && grid[ny][nx]===1){
+      grid[y+dy/2][x+dx/2]=0;
+      carve(nx,ny);
+    }
+  }
  }
+ carve(1,1);
+ return grid;
 }
 
-// normalize path to screen
-function getScreenPath(){
- let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
- path.forEach(p=>{
-   minX=Math.min(minX,p.x);
-   maxX=Math.max(maxX,p.x);
-   minY=Math.min(minY,p.y);
-   maxY=Math.max(maxY,p.y);
- });
-
- let scale = Math.min(c.width/(maxX-minX+4), c.height/(maxY-minY+4));
-
- return path.map(p=>({
-   x:(p.x-minX)*scale + 50,
-   y:(p.y-minY)*scale + 50
- }));
-}
-
-heartPath();
-let screenPath = getScreenPath();
-
-let playerIndex = 0;
-
-let checkpointIndex = Math.floor(screenPath.length/2);
-let reachedCheckpoint=false;
+let grid = generateMaze(size);
+let player={x:1.5,y:1.5};
+let goal={x:size-2,y:size-2};
 
 let joy={x:0,y:0};
-
 let startTime=null;
 let finished=false;
+
+let score=0;
+let speedBoost=0;
+
+// collectibles
+let orbs=[];
+for(let i=0;i<25;i++){
+ let x,y;
+ do{
+   x=Math.floor(Math.random()*size);
+   y=Math.floor(Math.random()*size);
+ }while(grid[y][x]!==0 || (x<3&&y<3));
+ orbs.push({x,y,active:true});
+}
 
 // joystick
 const joyDiv=document.getElementById("joy");
@@ -143,89 +134,128 @@ joyDiv.ontouchend=()=>{
  stick.style.top="35px";
 };
 
-// music
+// audio
+let audioCtx;
+function beep(f,d){
+ if(!audioCtx) return;
+ let o=audioCtx.createOscillator();
+ let g=audioCtx.createGain();
+ o.connect(g); g.connect(audioCtx.destination);
+ o.frequency.value=f;
+ o.start();
+ g.gain.setValueAtTime(0.1,audioCtx.currentTime);
+ g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+d);
+ o.stop(audioCtx.currentTime+d);
+}
+
 document.body.addEventListener("touchstart",()=>{
  if(!startTime){
    startTime=Date.now();
    document.getElementById("ui").innerText="";
-   let music=document.getElementById("music");
-   music.volume=0.4;
-   music.play().catch(()=>{});
+   document.getElementById("music").play().catch(()=>{});
+   audioCtx=new (window.AudioContext||window.webkitAudioContext)();
  }
 },{once:true});
 
-// movement along path
-function update(){
+// collision
+function isWall(x,y){
+ if(x<1||y<1||x>size-2||y>size-2) return true;
+ return grid[Math.floor(y)][Math.floor(x)]!==0;
+}
 
+function move(){
+ let speed=0.05 + speedBoost;
+ let steps=4;
+
+ for(let i=0;i<steps;i++){
+   let nx=player.x+(joy.x*speed/steps);
+   if(!isWall(nx,player.y)) player.x=nx;
+   let ny=player.y+(joy.y*speed/steps);
+   if(!isWall(player.x,ny)) player.y=ny;
+ }
+}
+
+// update
+function update(){
  if(finished) return;
 
- let speed = joy.y * -2; // forward/back
+ move();
 
- playerIndex += speed;
+ speedBoost*=0.95;
 
- playerIndex = Math.max(0, Math.min(screenPath.length-1, playerIndex));
+ // collect
+ orbs.forEach(o=>{
+   if(o.active &&
+      Math.floor(player.x)===o.x &&
+      Math.floor(player.y)===o.y){
+     o.active=false;
+     score+=10;
+     speedBoost+=0.02;
+     beep(500,0.1);
+   }
+ });
 
- if(!reachedCheckpoint && playerIndex >= checkpointIndex){
-   reachedCheckpoint=true;
- }
+ // win
+ if(Math.floor(player.x)===goal.x &&
+    Math.floor(player.y)===goal.y){
 
- if(playerIndex >= screenPath.length-2){
    finished=true;
+   beep(900,0.3);
 
    let t=((Date.now()-startTime)/1000).toFixed(1);
+
    document.getElementById("time").innerText="Time: "+t+"s";
-
-   let calm = t < 60 ? "😌 Very Calm"
-            : t < 120 ? "🙂 Calm"
-            : "🔥 Intense";
-
-   document.getElementById("calm").innerText = calm;
-
+   document.getElementById("score").innerText="Score: "+score;
    document.getElementById("end").style.display="block";
  }
 }
 
 // draw
 function draw(){
-
  ctx.fillStyle="black";
  ctx.fillRect(0,0,c.width,c.height);
 
- // path glow
- ctx.strokeStyle="#0a3d62";
- ctx.lineWidth=10;
- ctx.beginPath();
- screenPath.forEach((p,i)=>{
-   if(i===0) ctx.moveTo(p.x,p.y);
-   else ctx.lineTo(p.x,p.y);
- });
- ctx.stroke();
+ let cell=Math.min(c.width,c.height)/size;
+ let ox=(c.width-cell*size)/2;
+ let oy=(c.height-cell*size)/2;
 
- // checkpoint
- let cp = screenPath[checkpointIndex];
- if(!reachedCheckpoint){
-   ctx.fillStyle="cyan";
-   ctx.beginPath();
-   ctx.arc(cp.x,cp.y,10,0,Math.PI*2);
-   ctx.fill();
+ for(let y=0;y<size;y++){
+  for(let x=0;x<size;x++){
+    if(grid[y][x]===0){
+      ctx.fillStyle="#0a3d62";
+      ctx.fillRect(ox+x*cell,oy+y*cell,cell,cell);
+    }
+  }
  }
 
- // player
- let p = screenPath[Math.floor(playerIndex)];
+ // orbs
+ orbs.forEach(o=>{
+   if(o.active){
+     ctx.fillStyle="gold";
+     ctx.beginPath();
+     ctx.arc(ox+o.x*cell+cell/2,oy+o.y*cell+cell/2,4,0,Math.PI*2);
+     ctx.fill();
+   }
+ });
+
+ ctx.fillStyle="yellow";
+ ctx.fillRect(ox+goal.x*cell,oy+goal.y*cell,cell,cell);
 
  ctx.shadowColor="red";
- ctx.shadowBlur=20;
-
+ ctx.shadowBlur=15;
  ctx.fillStyle="red";
  ctx.beginPath();
- ctx.arc(p.x,p.y,reachedCheckpoint?14:10,0,Math.PI*2);
+ ctx.arc(
+   ox+player.x*cell+cell/2,
+   oy+player.y*cell+cell/2,
+   cell*0.3,0,Math.PI*2
+ );
  ctx.fill();
-
  ctx.shadowBlur=0;
 
  if(startTime && !finished){
   let t=((Date.now()-startTime)/1000).toFixed(1);
-  document.getElementById("ui").innerText="Time: "+t+"s";
+  document.getElementById("ui").innerText="Time: "+t+"s | Score: "+score;
  }
 }
 
@@ -235,9 +265,19 @@ function loop(){
  requestAnimationFrame(loop);
 }
 
+document.body.onclick=()=>{
+ if(!startTime){
+   startTime=Date.now();
+   document.getElementById("ui").innerText="";
+ }
+};
+
 function restart(){
- playerIndex=0;
- reachedCheckpoint=false;
+ grid=generateMaze(size);
+ player={x:1.5,y:1.5};
+ score=0;
+ speedBoost=0;
+ orbs.forEach(o=>o.active=true);
  startTime=Date.now();
  finished=false;
  document.getElementById("end").style.display="none";
