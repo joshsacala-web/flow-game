@@ -58,6 +58,7 @@ button{
 
 <div id="end">
   <h2 id="time"></h2>
+  <div id="calm"></div>
   <button onclick="restart()">Play Again</button>
 </div>
 
@@ -76,16 +77,15 @@ const ctx = c.getContext("2d");
 c.width = innerWidth;
 c.height = innerHeight;
 
-let size = 35; // ⭐ balanced difficulty
+let size = 35;
 
+// MAZE
 function generateMaze(n){
  let grid = Array.from({length:n},()=>Array(n).fill(1));
-
  function carve(x,y){
   grid[y][x]=0;
   let dirs=[[2,0],[-2,0],[0,2],[0,-2]]
-    .sort(()=>Math.random()-0.3); // smoother flow
-
+    .sort(()=>Math.random()-0.3);
   for(let [dx,dy] of dirs){
     let nx=x+dx, ny=y+dy;
     if(ny>0&&ny<n&&nx>0&&nx<n && grid[ny][nx]===1){
@@ -94,7 +94,6 @@ function generateMaze(n){
     }
   }
  }
-
  carve(1,1);
  return grid;
 }
@@ -109,10 +108,12 @@ let reachedCheckpoint=false;
 
 let joy={x:0,y:0};
 
+let trail=[];
+
 let startTime=null;
 let finished=false;
 
-// 🎮 joystick
+// JOYSTICK
 const joyDiv=document.getElementById("joy");
 const stick=document.getElementById("stick");
 
@@ -122,24 +123,20 @@ joyDiv.ontouchmove=e=>{
  let dx=t.clientX-(r.left+60);
  let dy=t.clientY-(r.top+60);
  let d=Math.hypot(dx,dy);
-
  if(d>40){ dx*=40/d; dy*=40/d; }
-
  stick.style.left=(dx+35)+"px";
  stick.style.top=(dy+35)+"px";
-
  joy.x=dx/40;
  joy.y=dy/40;
 };
 
 joyDiv.ontouchend=()=>{
- joy.x=0;
- joy.y=0;
+ joy.x=0; joy.y=0;
  stick.style.left="35px";
  stick.style.top="35px";
 };
 
-// 🎵 music start
+// MUSIC
 document.body.addEventListener("touchstart",()=>{
  if(!startTime){
    startTime=Date.now();
@@ -150,7 +147,7 @@ document.body.addEventListener("touchstart",()=>{
  }
 },{once:true});
 
-// 🔒 collision
+// COLLISION
 function isWall(x,y){
  return grid[Math.floor(y)]?.[Math.floor(x)] !== 0;
 }
@@ -158,21 +155,22 @@ function isWall(x,y){
 function move(){
  let speed=0.05;
  let steps=3;
-
  for(let i=0;i<steps;i++){
    let nx = player.x + (joy.x * speed / steps);
    if(!isWall(nx, player.y)) player.x = nx;
-
    let ny = player.y + (joy.y * speed / steps);
    if(!isWall(player.x, ny)) player.y = ny;
  }
 }
 
+// UPDATE
 function update(){
-
  if(finished) return;
 
  move();
+
+ trail.push({x:player.x,y:player.y});
+ if(trail.length>15) trail.shift();
 
  if(!reachedCheckpoint &&
    Math.floor(player.x)===checkpoint.x &&
@@ -188,10 +186,19 @@ function update(){
    let t=((Date.now()-startTime)/1000).toFixed(1);
 
    document.getElementById("time").innerText="Time: "+t+"s";
+
+   let calm = t < 60 ? "😌 Very Calm"
+            : t < 120 ? "🙂 Calm"
+            : t < 180 ? "😅 Focused"
+            : "🔥 Intense";
+
+   document.getElementById("calm").innerText = calm;
+
    document.getElementById("end").style.display="block";
  }
 }
 
+// DRAW
 function draw(){
  ctx.fillStyle="black";
  ctx.fillRect(0,0,c.width,c.height);
@@ -220,7 +227,19 @@ function draw(){
    ctx.fillRect(ox+checkpoint.x*cell,oy+checkpoint.y*cell,cell,cell);
  }
 
+ // TRAIL
+ trail.forEach((p,i)=>{
+   ctx.fillStyle="rgba(255,100,100,"+(i/15)+")";
+   ctx.beginPath();
+   ctx.arc(ox+p.x*cell+cell/2,oy+p.y*cell+cell/2,2,0,Math.PI*2);
+   ctx.fill();
+ });
+
+ // PLAYER GLOW
  let r = reachedCheckpoint ? cell*0.45 : cell*0.3;
+
+ ctx.shadowColor="red";
+ ctx.shadowBlur=20;
 
  ctx.fillStyle="red";
  ctx.beginPath();
@@ -231,12 +250,15 @@ function draw(){
  );
  ctx.fill();
 
+ ctx.shadowBlur=0;
+
  if(startTime && !finished){
   let t=((Date.now()-startTime)/1000).toFixed(1);
   document.getElementById("ui").innerText="Time: "+t+"s";
  }
 }
 
+// LOOP
 function loop(){
  update();
  draw();
@@ -247,6 +269,7 @@ function restart(){
  grid = generateMaze(size);
  player={x:1.5,y:1.5};
  reachedCheckpoint=false;
+ trail=[];
  startTime=Date.now();
  finished=false;
  document.getElementById("end").style.display="none";
