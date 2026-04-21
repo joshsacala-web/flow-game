@@ -1,236 +1,184 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Calm Heart Flow</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Heart Flow Maze</title>
 <style>
-body { margin:0; overflow:hidden; background:#000; touch-action:none; }
-canvas { display:block; }
-
-#joy {
- position:absolute;
- bottom:40px;
- left:50%;
- transform:translateX(-50%);
- width:140px;height:140px;
- border-radius:50%;
- background:rgba(255,255,255,0.06);
+body {
+  margin:0;
+  background: linear-gradient(#ff9a6b,#355c7d);
+  overflow:hidden;
+  font-family:sans-serif;
 }
-
-#stick {
- position:absolute;
- width:60px;height:60px;
- border-radius:50%;
- background:#ffd166;
- left:40px;top:40px;
- box-shadow:0 0 15px #ffd166;
+canvas {
+  display:block;
+  margin:auto;
 }
-
 #ui {
- position:absolute;
- top:10px;
- width:100%;
- text-align:center;
- color:#fff;
- font-family:sans-serif;
+  position:absolute;
+  top:10px;
+  width:100%;
+  text-align:center;
+  color:white;
+}
+#joystick {
+  position:absolute;
+  bottom:40px;
+  left:50%;
+  transform:translateX(-50%);
+  width:100px;
+  height:100px;
+  border-radius:50%;
+  background:rgba(255,255,255,0.15);
+}
+#stick {
+  width:40px;
+  height:40px;
+  background:#ffd166;
+  border-radius:50%;
+  position:absolute;
+  top:30px;
+  left:30px;
 }
 </style>
 </head>
-
 <body>
 
-<div id="ui">Tap to begin 🌊</div>
-<canvas id="c"></canvas>
-<div id="joy"><div id="stick"></div></div>
+<div id="ui">Tap to start 🌊</div>
+<canvas id="game"></canvas>
 
-<audio id="audio" loop></audio>
+<div id="joystick"><div id="stick"></div></div>
+
+<audio id="audio" loop>
+<source src="https://cdn.pixabay.com/audio/2022/03/15/audio_115b9b4b6f.mp3">
+</audio>
 
 <script>
-const c = document.getElementById("c");
-const ctx = c.getContext("2d");
-c.width = innerWidth;
-c.height = innerHeight;
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
-const GRID = 25;
-const tile = Math.min(c.width, c.height-150)/GRID;
+canvas.width = innerWidth;
+canvas.height = innerHeight;
 
-// ❤️ heart mask
-function inHeart(x,y){
- let nx=(x-GRID/2)/(GRID/2);
- let ny=(y-GRID/2)/(GRID/2);
- return Math.pow(nx*nx+ny*ny-1,3)-nx*nx*ny*ny*ny<=0;
+const size = 25;
+const cols = 21;
+const rows = 21;
+
+let grid = [];
+let player = {x:1,y:1};
+let goal = {x:cols-2,y:rows-2};
+
+function heartMask(x,y){
+  let nx = (x-cols/2)/(cols/2);
+  let ny = (y-rows/2)/(rows/2);
+  return Math.pow(nx*nx+ny*ny-1,3)-nx*nx*ny*ny*ny <= 0;
 }
 
-// simple clean path maze (less chaotic)
-let maze = Array.from({length:GRID},()=>Array(GRID).fill(1));
+// Generate clean maze
+function generate(){
+  grid = Array.from({length:rows},()=>Array(cols).fill(1));
 
-for(let y=0;y<GRID;y++){
- for(let x=0;x<GRID;x++){
-   maze[y][x]=inHeart(x,y)?1:2;
- }
+  function carve(x,y){
+    grid[y][x]=0;
+    let dirs = [[1,0],[-1,0],[0,1],[0,-1]]
+      .sort(()=>Math.random()-0.5);
+
+    for(let [dx,dy] of dirs){
+      let nx=x+dx*2, ny=y+dy*2;
+      if(grid[ny] && grid[ny][nx]===1 && heartMask(nx,ny)){
+        grid[y+dy][x+dx]=0;
+        carve(nx,ny);
+      }
+    }
+  }
+
+  carve(1,1);
+
+  // remove junk outside heart
+  for(let y=0;y<rows;y++){
+    for(let x=0;x<cols;x++){
+      if(!heartMask(x,y)) grid[y][x]=1;
+    }
+  }
 }
 
-// carve main path vertically
-for(let y=GRID-3;y>2;y--){
- maze[y][Math.floor(GRID/2)]=0;
- if(Math.random()<0.3){
-   maze[y][Math.floor(GRID/2)+1]=0;
- }
- if(Math.random()<0.3){
-   maze[y][Math.floor(GRID/2)-1]=0;
- }
-}
-
-// player
-let player={x:Math.floor(GRID/2), y:GRID-3};
-let vel={x:0,y:0};
-let joy={x:0,y:0};
-
-// few collectibles
-let hearts=[
- {x:12,y:15,alive:true},
- {x:10,y:10,alive:true},
- {x:14,y:7,alive:true}
-];
-
-let score=0;
+generate();
 
 // joystick
-const stick=document.getElementById("stick");
+let joy = {x:0,y:0};
+const stick = document.getElementById("stick");
+const joyDiv = document.getElementById("joystick");
 
-document.getElementById("joy").addEventListener("touchmove", e=>{
- let r=e.target.getBoundingClientRect();
- let x=e.touches[0].clientX-r.left-70;
- let y=e.touches[0].clientY-r.top-70;
-
- let d=Math.hypot(x,y);
- let max=50;
- if(d>max){ x*=max/d; y*=max/d; }
-
- joy.x=x/max;
- joy.y=y/max;
-
- stick.style.left=(70+x-30)+"px";
- stick.style.top=(70+y-30)+"px";
+joyDiv.addEventListener("touchmove", e=>{
+  let rect = joyDiv.getBoundingClientRect();
+  let t = e.touches[0];
+  let dx = t.clientX - (rect.left+50);
+  let dy = t.clientY - (rect.top+50);
+  let dist = Math.hypot(dx,dy);
+  if(dist>40){
+    dx*=40/dist;
+    dy*=40/dist;
+  }
+  stick.style.left = (dx+30)+"px";
+  stick.style.top = (dy+30)+"px";
+  joy.x = dx/40;
+  joy.y = dy/40;
 });
 
-document.getElementById("joy").addEventListener("touchend", ()=>{
- joy.x=0; joy.y=0;
- stick.style.left="40px";
- stick.style.top="40px";
+joyDiv.addEventListener("touchend",()=>{
+  joy.x=0; joy.y=0;
+  stick.style.left="30px";
+  stick.style.top="30px";
 });
 
-// audio
-let started=false;
-document.body.addEventListener("click", ()=>{
- if(started) return;
- started=true;
+// movement loop
+function update(){
+  let speed = 0.08;
+  let nx = player.x + joy.x*speed;
+  let ny = player.y + joy.y*speed;
 
- let a=document.getElementById("audio");
- a.src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_5c6f1b7b1b.mp3";
- a.volume=0.25;
- a.play().catch(()=>{});
+  if(grid[Math.floor(ny)] && grid[Math.floor(ny)][Math.floor(nx)]===0){
+    player.x = nx;
+    player.y = ny;
+  }
 
- document.getElementById("ui").innerText="";
-});
-
-// collision
-function wall(x,y){
- let gx=Math.floor(x);
- let gy=Math.floor(y);
- return maze[gy] && maze[gy][gx]!==0;
+  draw();
+  requestAnimationFrame(update);
 }
 
-// draw
-let t=0;
 function draw(){
- t+=0.02;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
- // 🌅 soft background
- let g=ctx.createLinearGradient(0,0,0,c.height);
- g.addColorStop(0,"#ffb88c");
- g.addColorStop(1,"#2c3e50");
- ctx.fillStyle=g;
- ctx.fillRect(0,0,c.width,c.height);
+  let cell = Math.min(canvas.width,canvas.height)/cols;
 
- let ox=(c.width-GRID*tile)/2;
- let oy=(c.height-GRID*tile)/2;
-
- // water
- for(let y=0;y<GRID;y++){
-  for(let x=0;x<GRID;x++){
-   if(maze[y][x]!==0) continue;
-
-   let px=ox+x*tile;
-   let py=oy+y*tile;
-
-   let wave=Math.sin(t+x*0.5+y*0.3)*2;
-
-   ctx.fillStyle="rgba(0,180,255,0.2)";
-   ctx.fillRect(px,py+wave,tile,tile);
+  // maze
+  for(let y=0;y<rows;y++){
+    for(let x=0;x<cols;x++){
+      if(grid[y][x]===1){
+        ctx.fillStyle="#3b2f2f";
+        ctx.fillRect(x*cell,y*cell,cell,cell);
+      }
+    }
   }
- }
 
- // movement (LESS drift = calmer)
- vel.x+=joy.x*0.05;
- vel.y+=joy.y*0.05;
+  // player (heart)
+  ctx.fillStyle="white";
+  ctx.font = cell+"px serif";
+  ctx.fillText("❤",player.x*cell,player.y*cell);
 
- vel.x*=0.8;
- vel.y*=0.8;
-
- // gentle upward current
- vel.y -= 0.01;
-
- let nx=player.x+vel.x;
- let ny=player.y+vel.y;
-
- if(!wall(nx,player.y)) player.x=nx;
- if(!wall(player.x,ny)) player.y=ny;
-
- // collectibles
- hearts.forEach(h=>{
-  if(h.alive && Math.floor(player.x)===h.x && Math.floor(player.y)===h.y){
-   h.alive=false;
-   score++;
-  }
- });
-
- hearts.forEach(h=>{
-  if(!h.alive) return;
-  let px=ox+h.x*tile;
-  let py=oy+h.y*tile;
-
-  ctx.fillStyle="pink";
-  ctx.beginPath();
-  ctx.arc(px+tile/2,py+tile/2,5,0,Math.PI*2);
-  ctx.fill();
- });
-
- // player
- let px=ox+player.x*tile;
- let py=oy+player.y*tile;
-
- ctx.fillStyle="#fff";
- ctx.beginPath();
- ctx.moveTo(px,py);
- ctx.bezierCurveTo(px+tile/2,py-tile/2,px+tile,py,px,py+tile);
- ctx.bezierCurveTo(px-tile,py,px-tile/2,py-tile/2,px,py);
- ctx.fill();
-
- // goal
- let gx=Math.floor(GRID/2), gy=2;
- ctx.fillStyle="#ffd166";
- ctx.fillRect(ox+gx*tile,oy+gy*tile,tile,tile);
-
- // UI
- document.getElementById("ui").innerText="❤️ "+score;
-
- requestAnimationFrame(draw);
+  // goal
+  ctx.fillStyle="gold";
+  ctx.fillRect(goal.x*cell,goal.y*cell,cell,cell);
 }
 
-draw();
-</script>
+// audio unlock
+document.body.addEventListener("click",()=>{
+  document.getElementById("audio").play();
+  document.getElementById("ui").innerText="";
+},{once:true});
 
+update();
+</script>
 </body>
 </html>
