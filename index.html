@@ -2,218 +2,273 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Heart Maze Ultimate</title>
+<title>Heart Maze</title>
 
 <style>
 body {
-  margin: 0;
-  overflow: hidden;
+  margin:0;
   background: radial-gradient(circle, #140010, #000);
-  font-family: Arial;
-  color: white;
+  overflow:hidden;
+  font-family:Arial;
+  color:white;
 }
 
-#ui {
-  position: absolute;
-  top: 20px;
-  width: 100%;
-  text-align: center;
+canvas { display:block; margin:auto; }
+
+#overlay {
+  position:absolute;
+  width:100%; height:100%;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  background:rgba(0,0,0,0.6);
+  text-align:center;
 }
 
-#title {
-  font-size: 26px;
-  color: #ff4d6d;
-  text-shadow: 0 0 15px #ff4d6d;
+#hud {
+  position:absolute;
+  top:10px;
+  width:100%;
+  display:flex;
+  justify-content:space-between;
+  padding:0 20px;
+  box-sizing:border-box;
+  font-size:14px;
 }
 
-#msg {
-  font-size: 14px;
-  opacity: 0.8;
+button {
+  margin-top:15px;
+  padding:10px 20px;
+  border:none;
+  border-radius:8px;
+  background:#ff4d6d;
+  color:white;
 }
 </style>
 </head>
 
 <body>
 
-<div id="ui">
-  <div id="title">❤️ HEART MAZE</div>
-  <div id="msg">Reach the glowing heart</div>
+<div id="hud">
+  <div id="time">Time: 0.0</div>
+  <div id="score">Score: 0</div>
+  <div id="best">Best: 0</div>
+  <div><button onclick="toggleMusic()">🎵</button></div>
 </div>
 
 <canvas id="game" width="500" height="500"></canvas>
+
+<div id="overlay">
+  <h1>❤️ HEART MAZE</h1>
+  <p id="msg">Tap Start</p>
+  <button onclick="startGame()">Start</button>
+</div>
+
+<!-- 🎵 stable music -->
+<audio id="bgMusic" loop preload="auto">
+  <source src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_5c6f1b7b1b.mp3?filename=ambient-piano-110624.mp3" type="audio/mpeg">
+</audio>
 
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-const size = 20;
-const cols = canvas.width / size;
-const rows = canvas.height / size;
+const size=20, cols=25, rows=25;
 
-let time = 0;
-let gameState = "play";
+let state="menu";
+let grid, player, goal, enemy;
+let playerVisual;
+let startTime=0, elapsed=0, score=0;
+let best = localStorage.getItem("heart_best") || 0;
+let particles=[];
 
-let player = { x: 10, y: 18 };
-let visualPlayer = { x: 10, y: 18 };
+document.getElementById("best").innerText="Best: "+best;
 
-let goal = { x: 10, y: 2 };
-let enemy = { x: 5, y: 10, dir: 1 };
+// 🎵 MUSIC (robust)
+const bgMusic = document.getElementById("bgMusic");
+let musicEnabled = true;
 
-// ❤️ heart mask
-function isHeart(x, y) {
-  let nx = (x - cols/2) / (cols/2);
-  let ny = (y - rows/2) / (rows/2);
-  return Math.pow(nx*nx + ny*ny - 1, 3) - nx*nx * ny*ny*ny <= 0;
+function safePlayMusic(){
+  if(!musicEnabled) return;
+  bgMusic.volume = 0.4;
+
+  let playPromise = bgMusic.play();
+  if(playPromise !== undefined){
+    playPromise.catch(()=>{});
+  }
 }
 
-// 🧠 SOLVABLE MAZE (simple carve path)
-let grid = Array.from({length: rows}, () => Array(cols).fill(1));
+function toggleMusic(){
+  musicEnabled = !musicEnabled;
+  if(musicEnabled) safePlayMusic();
+  else bgMusic.pause();
+}
 
-function carvePath(x, y) {
-  let dirs = [[1,0],[-1,0],[0,1],[0,-1]]
-    .sort(() => Math.random() - 0.5);
+// ❤️ heart shape
+function isHeart(x,y){
+  let nx=(x-cols/2)/(cols/2);
+  let ny=(y-rows/2)/(rows/2);
+  return Math.pow(nx*nx+ny*ny-1,3)-nx*nx*ny*ny*ny<=0;
+}
 
-  for (let [dx, dy] of dirs) {
-    let nx = x + dx*2;
-    let ny = y + dy*2;
+// 🧠 maze
+function generate(){
+  grid=Array.from({length:rows},()=>Array(cols).fill(1));
 
-    if (grid[ny] && grid[ny][nx] === 1 && isHeart(nx, ny)) {
-      grid[ny][nx] = 0;
-      grid[y+dy][x+dx] = 0;
-      carvePath(nx, ny);
+  function carve(x,y){
+    let dirs=[[1,0],[-1,0],[0,1],[0,-1]].sort(()=>Math.random()-0.5);
+    for(let [dx,dy] of dirs){
+      let nx=x+dx*2, ny=y+dy*2;
+      if(grid[ny] && grid[ny][nx]===1 && isHeart(nx,ny)){
+        grid[ny][nx]=0;
+        grid[y+dy][x+dx]=0;
+        carve(nx,ny);
+      }
     }
   }
+
+  player={x:12,y:20};
+  goal={x:12,y:2};
+
+  grid[player.y][player.x]=0;
+  carve(player.x,player.y);
+  grid[goal.y][goal.x]=0;
+
+  enemy={x:5,y:10,dir:1};
+  playerVisual={...player};
 }
 
-// init maze
-for (let y=0;y<rows;y++){
-  for (let x=0;x<cols;x++){
-    if (isHeart(x,y)) grid[y][x]=1;
+// particles
+function spawnParticles(x,y){
+  for(let i=0;i<6;i++){
+    particles.push({
+      x,y,
+      vx:(Math.random()-0.5)*2,
+      vy:(Math.random()-0.5)*2,
+      life:20
+    });
   }
-}
-
-grid[player.y][player.x]=0;
-carvePath(player.x, player.y);
-grid[goal.y][goal.x]=0;
-
-// 🎵 SOUND (simple)
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-function beep(freq, dur=0.1){
-  let o = audioCtx.createOscillator();
-  let g = audioCtx.createGain();
-  o.connect(g); g.connect(audioCtx.destination);
-  o.frequency.value = freq;
-  o.start();
-  g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
-  o.stop(audioCtx.currentTime + dur);
 }
 
 // controls
-document.addEventListener("keydown", e=>{
-  if (gameState !== "play") return;
+document.addEventListener("keydown",e=>{
+  if(state!=="play") return;
 
-  let dx=0, dy=0;
+  let dx=0,dy=0;
   if(e.key==="ArrowUp")dy=-1;
   if(e.key==="ArrowDown")dy=1;
   if(e.key==="ArrowLeft")dx=-1;
   if(e.key==="ArrowRight")dx=1;
 
-  let nx=player.x+dx;
-  let ny=player.y+dy;
+  let nx=player.x+dx, ny=player.y+dy;
 
   if(grid[ny] && grid[ny][nx]===0){
     player.x=nx;
     player.y=ny;
-    beep(400,0.05);
+    spawnParticles(nx*size,ny*size);
   }
 });
 
-// 💀 enemy movement
+// start
+function startGame(){
+  generate();
+  state="play";
+  startTime=Date.now();
+  score=0;
+
+  document.getElementById("overlay").style.display="none";
+
+  // required for browser audio
+  safePlayMusic();
+}
+
+// enemy
 function updateEnemy(){
-  if(time % 20 < 1){
-    let nx = enemy.x + enemy.dir;
+  if(Math.random()<0.05){
+    let nx=enemy.x+enemy.dir;
     if(grid[enemy.y][nx]===0){
-      enemy.x = nx;
-    } else {
-      enemy.dir *= -1;
-    }
+      enemy.x=nx;
+    } else enemy.dir*=-1;
   }
 }
 
-// draw
+// draw loop
 function draw(){
-  time+=0.05;
+  ctx.clearRect(0,0,500,500);
 
-  ctx.fillStyle="rgba(10,0,10,0.3)";
-  ctx.fillRect(0,0,canvas.width,canvas.height);
+  if(state==="play"){
+    elapsed=(Date.now()-startTime)/1000;
+    score=Math.max(0, Math.floor(1000 - elapsed*50));
+
+    document.getElementById("time").innerText="Time: "+elapsed.toFixed(1);
+    document.getElementById("score").innerText="Score: "+score;
+  }
 
   // walls
   for(let y=0;y<rows;y++){
     for(let x=0;x<cols;x++){
-      if(grid[y][x]===1){
-        ctx.shadowColor="#ff4d6d";
-        ctx.shadowBlur=8;
+      if(grid && grid[y][x]===1){
         ctx.fillStyle="#ff4d6d";
         ctx.fillRect(x*size,y*size,size,size);
-        ctx.shadowBlur=0;
       }
     }
   }
 
-  // goal ❤️
-  ctx.shadowColor="#ff00aa";
-  ctx.shadowBlur=20;
-  ctx.fillStyle="#ff00aa";
-  ctx.beginPath();
-  ctx.arc(goal.x*size+10, goal.y*size+10, 6+Math.sin(time)*2,0,Math.PI*2);
-  ctx.fill();
-  ctx.shadowBlur=0;
+  if(state==="play"){
+    // goal pulse
+    ctx.fillStyle="#ff00aa";
+    ctx.beginPath();
+    ctx.arc(goal.x*size+10,goal.y*size+10,6+Math.sin(Date.now()/200)*2,0,Math.PI*2);
+    ctx.fill();
 
-  // enemy 💀
-  ctx.shadowColor="#ff0000";
-  ctx.shadowBlur=15;
-  ctx.fillStyle="#ff0000";
-  ctx.fillRect(enemy.x*size+5, enemy.y*size+5,10,10);
-  ctx.shadowBlur=0;
+    // enemy
+    ctx.fillStyle="red";
+    ctx.fillRect(enemy.x*size+5,enemy.y*size+5,10,10);
 
-  // player
-  visualPlayer.x += (player.x - visualPlayer.x)*0.2;
-  visualPlayer.y += (player.y - visualPlayer.y)*0.2;
+    // player smooth
+    playerVisual.x+=(player.x-playerVisual.x)*0.2;
+    playerVisual.y+=(player.y-playerVisual.y)*0.2;
 
-  ctx.shadowColor="#00f0ff";
-  ctx.shadowBlur=20;
-  ctx.fillStyle="#00f0ff";
-  ctx.beginPath();
-  ctx.arc(
-    visualPlayer.x*size+10,
-    visualPlayer.y*size+10,
-    6+Math.sin(time*3),
-    0,Math.PI*2
-  );
-  ctx.fill();
-  ctx.shadowBlur=0;
+    ctx.fillStyle="#00f0ff";
+    ctx.beginPath();
+    ctx.arc(playerVisual.x*size+10,playerVisual.y*size+10,6,0,Math.PI*2);
+    ctx.fill();
 
-  // collision checks
-  if(player.x===goal.x && player.y===goal.y && gameState==="play"){
-    gameState="win";
-    beep(800,0.3);
-    document.getElementById("msg").innerText="YOU WIN ❤️";
+    // particles
+    particles.forEach(p=>{
+      p.x+=p.vx; p.y+=p.vy; p.life--;
+      ctx.fillRect(p.x,p.y,2,2);
+    });
+    particles=particles.filter(p=>p.life>0);
+
+    // win
+    if(player.x===goal.x && player.y===goal.y){
+      state="win";
+      if(score>best){
+        best=score;
+        localStorage.setItem("heart_best", best);
+      }
+      showOverlay("YOU WIN ❤️ Score: "+score);
+    }
+
+    // lose
+    if(player.x===enemy.x && player.y===enemy.y){
+      state="lose";
+      showOverlay("GAME OVER 💀");
+    }
+
+    updateEnemy();
   }
 
-  if(player.x===enemy.x && player.y===enemy.y && gameState==="play"){
-    gameState="lose";
-    beep(100,0.3);
-    document.getElementById("msg").innerText="GAME OVER 💀";
-  }
-
-  if(gameState==="win"){
-    ctx.fillStyle="rgba(255,0,100,0.1)";
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-  }
-
-  updateEnemy();
   requestAnimationFrame(draw);
+}
+
+// overlay
+function showOverlay(msg){
+  document.getElementById("msg").innerText=msg;
+  document.getElementById("overlay").style.display="flex";
+  document.getElementById("best").innerText="Best: "+best;
 }
 
 draw();
