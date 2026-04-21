@@ -15,6 +15,21 @@ canvas { display:block; margin:auto; }
  font-family:sans-serif;
  font-size:18px;
 }
+
+#menu{
+ position:fixed;
+ top:50%;
+ left:50%;
+ transform:translate(-50%,-50%);
+ display:none;
+ text-align:center;
+}
+
+button{
+ padding:10px 20px;
+ margin:10px;
+ font-size:18px;
+}
 #joy {
  position:fixed;
  bottom:30px;
@@ -35,13 +50,16 @@ canvas { display:block; margin:auto; }
 </head>
 <body>
 
-<div id="ui">Tap to begin 🌊</div>
+<div id="ui">Tap to begin</div>
+
+<div id="menu">
+  <div id="result"></div>
+  <button onclick="restart()">Play Again</button>
+  <button onclick="exitGame()">Exit</button>
+</div>
+
 <canvas id="c"></canvas>
 <div id="joy"><div id="stick"></div></div>
-
-<audio id="audio" loop>
-<source src="https://cdn.pixabay.com/audio/2022/03/15/audio_115b9b4b6f.mp3">
-</audio>
 
 <script>
 const c = document.getElementById("c");
@@ -50,16 +68,15 @@ const ctx = c.getContext("2d");
 function resize(){ c.width=innerWidth; c.height=innerHeight; }
 resize(); onresize=resize;
 
-// LEVELS
-const levels = [
-[
+// HARDER MAZE
+const maze = [
 "1111111111111111111",
-"1000000000100000001",
-"1011111110101111101",
-"1010000010001000101",
+"1000000010000000001",
+"1011111010111111101",
+"1010001010000000101",
 "1010111011111010101",
-"1000101000001010001",
-"1110101011101010111",
+"1000100000001010001",
+"1110101111101010111",
 "1000001000100010001",
 "1011111010111011101",
 "1000000010000010001",
@@ -70,36 +87,11 @@ const levels = [
 "1010111111111011101",
 "1000000000000000001",
 "1111111111111111101"
-],
-[
-"1111111111111111111",
-"1000000000000000001",
-"1011111111111111101",
-"1010000000000000101",
-"1010111111111110101",
-"1010100000000010101",
-"1010101111111010101",
-"1000101000001010001",
-"1110101011101010111",
-"1000001000100010001",
-"1011111010111011101",
-"1000000010000010001",
-"1110111110111110101",
-"1000100000100000101",
-"1011101111101110101",
-"1000000000000000001",
-"1111111111111111111"
-]
 ];
-
-let levelIndex=0;
-let maze=levels[levelIndex];
 
 let start={x:1.5,y:1.5};
 let goal={x:17.5,y:15.5};
 let player={...start};
-
-let enemy={x:17.5,y:1.5};
 
 let joy={x:0,y:0};
 let startTime=null;
@@ -127,15 +119,6 @@ joyDiv.ontouchend=()=>{
  stick.style.top="30px";
 };
 
-// audio
-document.body.onclick=()=>{
- if(!startTime){
-   startTime=Date.now();
-   document.getElementById("audio").volume=0.3;
-   document.getElementById("audio").play();
- }
-};
-
 function canMove(x,y){
  return maze[Math.floor(y)][Math.floor(x)]==="0";
 }
@@ -146,47 +129,25 @@ function update(){
 
    let speed=0.06;
 
-   // 🌊 current upward
-   let currentY = -0.01;
-
    let nx=player.x+joy.x*speed;
    if(canMove(nx,player.y)) player.x=nx;
 
-   let ny=player.y+joy.y*speed + currentY;
+   let ny=player.y+joy.y*speed;
    if(canMove(player.x,ny)) player.y=ny;
 
-   // trail
    trail.push({x:player.x,y:player.y});
    if(trail.length>20) trail.shift();
 
-   // 👾 enemy (slow chase)
-   let dx=player.x-enemy.x;
-   let dy=player.y-enemy.y;
-   let dist=Math.hypot(dx,dy);
-   if(dist>0.1){
-     let ex=enemy.x+dx/dist*0.02;
-     let ey=enemy.y+dy/dist*0.02;
-     if(canMove(ex,enemy.y)) enemy.x=ex;
-     if(canMove(enemy.x,ey)) enemy.y=ey;
-   }
-
-   // collision with enemy
-   if(Math.hypot(player.x-enemy.x,player.y-enemy.y)<0.5){
-     navigator.vibrate?.(100);
-     player={...start};
-   }
-
    // win
-   if(Math.hypot(player.x-goal.x,player.y-goal.y)<0.5){
+   if(Math.hypot(player.x-goal.x, player.y-goal.y)<0.5){
      finished=true;
 
      let time=((Date.now()-startTime)/1000).toFixed(1);
 
-     let best = localStorage.getItem("best") || time;
-     if(time < best){ localStorage.setItem("best", time); best=time; }
+     document.getElementById("result").innerText =
+       "Time: "+time+"s";
 
-     document.getElementById("ui").innerText =
-       "Time: "+time+"s | Best: "+best+"s";
+     document.getElementById("menu").style.display="block";
    }
  }
 
@@ -194,37 +155,32 @@ function update(){
  requestAnimationFrame(update);
 }
 
-let t=0;
+// start timer
+document.body.onclick=()=>{
+ if(!startTime){
+   startTime=Date.now();
+   document.getElementById("ui").innerText="";
+ }
+};
+
+function restart(){
+ location.reload();
+}
+function exitGame(){
+ window.close();
+}
 
 function draw(){
- t+=0.02;
  ctx.clearRect(0,0,c.width,c.height);
-
- // background
- let g=ctx.createLinearGradient(0,0,0,c.height);
- g.addColorStop(0,"#ff9966");
- g.addColorStop(1,"#0b1a26");
- ctx.fillStyle=g;
- ctx.fillRect(0,0,c.width,c.height);
 
  let size=Math.min(c.width/19,c.height/17);
  let ox=(c.width-size*19)/2;
  let oy=(c.height-size*17)/2;
 
- // maze
  for(let y=0;y<maze.length;y++){
   for(let x=0;x<maze[0].length;x++){
-    let px=ox+x*size;
-    let py=oy+y*size;
-
-    if(maze[y][x]=="1"){
-      ctx.fillStyle="#000";
-      ctx.fillRect(px,py,size,size);
-    } else {
-      let wave=Math.sin(t+x+y)*2;
-      ctx.fillStyle="rgba(0,150,255,0.25)";
-      ctx.fillRect(px,py+wave,size,size);
-    }
+    ctx.fillStyle = maze[y][x]=="1" ? "#000" : "#0a3d62";
+    ctx.fillRect(ox+x*size,oy+y*size,size,size);
   }
  }
 
@@ -236,20 +192,15 @@ function draw(){
    ctx.fill();
  });
 
- // start + finish
+ // start
  ctx.fillStyle="lime";
  ctx.fillRect(ox+start.x*size,oy+start.y*size,size,size);
 
+ // goal
  ctx.fillStyle="gold";
  ctx.fillRect(ox+goal.x*size,oy+goal.y*size,size,size);
 
- // enemy
- ctx.fillStyle="purple";
- ctx.beginPath();
- ctx.arc(ox+enemy.x*size,oy+enemy.y*size,6,0,Math.PI*2);
- ctx.fill();
-
- // player ❤️
+ // player
  ctx.fillStyle="red";
  ctx.font=size+"px serif";
  ctx.fillText("❤",ox+player.x*size,oy+player.y*size);
