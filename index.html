@@ -1,31 +1,121 @@
-// 🧠 SMART MAZE (flow-based)
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Calm Maze</title>
+
+<style>
+body {
+  margin:0;
+  overflow:hidden;
+  background:#0a1a1f;
+  font-family:Arial;
+  color:white;
+}
+
+canvas {
+  position:absolute;
+  top:0; left:0;
+}
+
+#hud {
+  position:absolute;
+  top:10px;
+  width:100%;
+  text-align:center;
+  font-size:18px;
+}
+
+#overlay {
+  position:absolute;
+  width:100%;
+  height:100%;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  flex-direction:column;
+  background:rgba(0,0,0,0.5);
+}
+
+#joystick {
+  position:absolute;
+  bottom:40px;
+  left:30px;
+  width:110px;
+  height:110px;
+  border-radius:50%;
+  background:rgba(255,255,255,0.1);
+}
+
+#stick {
+  position:absolute;
+  width:44px;
+  height:44px;
+  border-radius:50%;
+  background:#00eaff;
+  left:33px;
+  top:33px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="hud">Time: <span id="time">0.0</span></div>
+
+<canvas id="game"></canvas>
+
+<div id="overlay">
+  <h1>🧭 Calm Maze</h1>
+  <button onclick="startGame()">Start</button>
+</div>
+
+<div id="joystick"><div id="stick"></div></div>
+
+<audio id="music" loop>
+  <source src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_5c6f1b7b1b.mp3">
+</audio>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+function resize(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener("resize", resize);
+
+const size = 24, cols = 21, rows = 21;
+
+let grid, player, goal;
+let joyX=0, joyY=0;
+let started=false;
+let startTime=0;
+
+// 🧠 SMART MAZE
 function generate(){
   grid = Array.from({length:rows},()=>Array(cols).fill(1));
 
   let goalX = cols-2;
   let goalY = rows-2;
 
-  function carve(x,y, lastDir=null){
-    // directions with bias toward goal
-    let dirs = [
-      [1,0],[-1,0],[0,1],[0,-1]
-    ];
+  function carve(x,y,lastDir=null){
+    let dirs = [[1,0],[-1,0],[0,1],[0,-1]];
 
     dirs.sort((a,b)=>{
-      // bias toward goal
       let da = Math.abs((x+a[0]*2)-goalX)+Math.abs((y+a[1]*2)-goalY);
       let db = Math.abs((x+b[0]*2)-goalX)+Math.abs((y+b[1]*2)-goalY);
 
-      // prefer same direction (flow)
       if(lastDir && a[0]===lastDir[0] && a[1]===lastDir[1]) da -= 2;
       if(lastDir && b[0]===lastDir[0] && b[1]===lastDir[1]) db -= 2;
 
-      return da - db + (Math.random()*2); // slight randomness
+      return da - db + Math.random()*2;
     });
 
     for(let [dx,dy] of dirs){
-      let nx = x + dx*2;
-      let ny = y + dy*2;
+      let nx=x+dx*2, ny=y+dy*2;
 
       if(grid[ny] && grid[ny][nx]===1){
         grid[ny][nx]=0;
@@ -35,29 +125,27 @@ function generate(){
     }
   }
 
-  player = {x:1,y:1};
-  goal = {x:goalX,y:goalY};
+  player={x:1,y:1};
+  goal={x:goalX,y:goalY};
 
   grid[player.y][player.x]=0;
   carve(player.x,player.y);
-
   grid[goal.y][goal.x]=0;
 
-  // ✨ CLEANUP: remove some dead ends
-  for(let i=0;i<100;i++){
+  // remove some dead ends
+  for(let i=0;i<80;i++){
     for(let y=1;y<rows-1;y++){
       for(let x=1;x<cols-1;x++){
         if(grid[y][x]===0){
-          let walls = 0;
+          let walls=0;
           if(grid[y+1][x]===1) walls++;
           if(grid[y-1][x]===1) walls++;
           if(grid[y][x+1]===1) walls++;
           if(grid[y][x-1]===1) walls++;
 
-          // if dead end, open one wall
-          if(walls >= 3){
-            let dirs = [[1,0],[-1,0],[0,1],[0,-1]];
-            let [dx,dy] = dirs[Math.floor(Math.random()*dirs.length)];
+          if(walls>=3){
+            let dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+            let [dx,dy]=dirs[Math.floor(Math.random()*dirs.length)];
             if(grid[y+dy] && grid[y+dy][x+dx]===1){
               grid[y+dy][x+dx]=0;
             }
@@ -67,3 +155,113 @@ function generate(){
     }
   }
 }
+
+// 🎮 joystick
+const stick=document.getElementById("stick");
+
+document.getElementById("joystick").addEventListener("touchmove", e=>{
+  let rect=e.target.getBoundingClientRect();
+  let x=e.touches[0].clientX-rect.left-55;
+  let y=e.touches[0].clientY-rect.top-55;
+
+  joyX=Math.max(-1,Math.min(1,x/40));
+  joyY=Math.max(-1,Math.min(1,y/40));
+
+  stick.style.left=(55+joyX*30)+"px";
+  stick.style.top=(55+joyY*30)+"px";
+
+  if(!started){
+    started=true;
+    startTime=Date.now();
+  }
+});
+
+document.getElementById("joystick").addEventListener("touchend", ()=>{
+  joyX=0; joyY=0;
+  stick.style.left="33px";
+  stick.style.top="33px";
+});
+
+// movement
+let px=1, py=1;
+
+function move(){
+  px += joyX * 0.08;
+  py += joyY * 0.08;
+
+  let gx = Math.round(px);
+  let gy = Math.round(py);
+
+  if(grid[gy] && grid[gy][gx]===0){
+    player.x = gx;
+    player.y = gy;
+  }
+}
+
+// start
+function startGame(){
+  generate();
+  started=false;
+  document.getElementById("overlay").style.display="none";
+
+  let music=document.getElementById("music");
+  music.volume=0.4;
+  music.play().catch(()=>{});
+}
+
+// draw
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  let offsetX=(canvas.width-cols*size)/2;
+  let offsetY=(canvas.height-rows*size)/2;
+
+  if(started){
+    let t=(Date.now()-startTime)/1000;
+    document.getElementById("time").innerText=t.toFixed(1);
+  }
+
+  for(let y=0;y<rows;y++){
+    for(let x=0;x<cols;x++){
+      if(grid && grid[y][x]===1){
+        ctx.fillStyle="#1f3a40";
+        ctx.fillRect(offsetX+x*size,offsetY+y*size,size,size);
+      } else {
+        ctx.fillStyle="#0f2a30";
+        ctx.fillRect(offsetX+x*size,offsetY+y*size,size,size);
+      }
+    }
+  }
+
+  if(player){
+    move();
+
+    // start
+    ctx.fillStyle="lime";
+    ctx.fillRect(offsetX+size, offsetY+size, size, size);
+
+    // finish
+    ctx.fillStyle="gold";
+    ctx.fillRect(offsetX+goal.x*size, offsetY+goal.y*size, size, size);
+
+    // player
+    ctx.fillStyle="#00eaff";
+    ctx.beginPath();
+    ctx.arc(offsetX+player.x*size+size/2, offsetY+player.y*size+size/2, 8, 0, Math.PI*2);
+    ctx.fill();
+
+    if(player.x===goal.x && player.y===goal.y){
+      let t=(Date.now()-startTime)/1000;
+      alert("Finished in "+t.toFixed(1)+"s 🌊");
+      location.reload();
+    }
+  }
+
+  requestAnimationFrame(draw);
+}
+
+draw();
+</script>
+
+</body>
+</html>
