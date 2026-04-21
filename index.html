@@ -1,182 +1,133 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Heart Flow Maze</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body {
-  margin:0;
-  background: linear-gradient(#ff9a6b,#355c7d);
-  overflow:hidden;
-  font-family:sans-serif;
-}
-canvas {
-  display:block;
-  margin:auto;
-}
-#ui {
-  position:absolute;
-  top:10px;
-  width:100%;
-  text-align:center;
-  color:white;
-}
-#joystick {
-  position:absolute;
-  bottom:40px;
-  left:50%;
-  transform:translateX(-50%);
-  width:100px;
-  height:100px;
-  border-radius:50%;
-  background:rgba(255,255,255,0.15);
+body { margin:0; background:#1e2a38; overflow:hidden; }
+canvas { display:block; margin:auto; }
+
+#joy {
+ position:fixed;
+ bottom:30px;
+ left:50%;
+ transform:translateX(-50%);
+ width:110px;height:110px;
+ border-radius:50%;
+ background:rgba(255,255,255,0.1);
 }
 #stick {
-  width:40px;
-  height:40px;
-  background:#ffd166;
-  border-radius:50%;
-  position:absolute;
-  top:30px;
-  left:30px;
+ width:50px;height:50px;
+ background:#ffd166;
+ border-radius:50%;
+ position:absolute;
+ top:30px;left:30px;
 }
 </style>
 </head>
 <body>
 
-<div id="ui">Tap to start 🌊</div>
-<canvas id="game"></canvas>
-
-<div id="joystick"><div id="stick"></div></div>
+<canvas id="c"></canvas>
+<div id="joy"><div id="stick"></div></div>
 
 <audio id="audio" loop>
 <source src="https://cdn.pixabay.com/audio/2022/03/15/audio_115b9b4b6f.mp3">
 </audio>
 
 <script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
 
-canvas.width = innerWidth;
-canvas.height = innerHeight;
-
-const size = 25;
-const cols = 21;
-const rows = 21;
-
-let grid = [];
-let player = {x:1,y:1};
-let goal = {x:cols-2,y:rows-2};
-
-function heartMask(x,y){
-  let nx = (x-cols/2)/(cols/2);
-  let ny = (y-rows/2)/(rows/2);
-  return Math.pow(nx*nx+ny*ny-1,3)-nx*nx*ny*ny*ny <= 0;
+function resize(){
+ c.width = innerWidth;
+ c.height = innerHeight;
 }
+resize();
+onresize = resize;
 
-// Generate clean maze
-function generate(){
-  grid = Array.from({length:rows},()=>Array(cols).fill(1));
+// SIMPLE HEART MAZE (clean, not broken)
+const maze = [
+"111111111111111",
+"100000111000001",
+"101110111011101",
+"101000000000101",
+"101011111110101",
+"100010000010001",
+"111010111010111",
+"100000101000001",
+"101111101111101",
+"100000000000001",
+"111111111111111"
+];
 
-  function carve(x,y){
-    grid[y][x]=0;
-    let dirs = [[1,0],[-1,0],[0,1],[0,-1]]
-      .sort(()=>Math.random()-0.5);
+let player = {x:1.5,y:1.5};
 
-    for(let [dx,dy] of dirs){
-      let nx=x+dx*2, ny=y+dy*2;
-      if(grid[ny] && grid[ny][nx]===1 && heartMask(nx,ny)){
-        grid[y+dy][x+dx]=0;
-        carve(nx,ny);
-      }
-    }
-  }
+let joy={x:0,y:0};
 
-  carve(1,1);
+const stick=document.getElementById("stick");
+const joyDiv=document.getElementById("joy");
 
-  // remove junk outside heart
-  for(let y=0;y<rows;y++){
-    for(let x=0;x<cols;x++){
-      if(!heartMask(x,y)) grid[y][x]=1;
-    }
-  }
-}
+joyDiv.ontouchmove=e=>{
+ let r=joyDiv.getBoundingClientRect();
+ let t=e.touches[0];
+ let dx=t.clientX-(r.left+55);
+ let dy=t.clientY-(r.top+55);
+ let d=Math.hypot(dx,dy);
+ if(d>40){dx*=40/d;dy*=40/d;}
+ stick.style.left=(dx+30)+"px";
+ stick.style.top=(dy+30)+"px";
+ joy.x=dx/40; joy.y=dy/40;
+};
+joyDiv.ontouchend=()=>{
+ joy.x=joy.y=0;
+ stick.style.left="30px";
+ stick.style.top="30px";
+};
 
-generate();
+// AUDIO START
+document.body.onclick=()=>{
+ document.getElementById("audio").play();
+};
 
-// joystick
-let joy = {x:0,y:0};
-const stick = document.getElementById("stick");
-const joyDiv = document.getElementById("joystick");
-
-joyDiv.addEventListener("touchmove", e=>{
-  let rect = joyDiv.getBoundingClientRect();
-  let t = e.touches[0];
-  let dx = t.clientX - (rect.left+50);
-  let dy = t.clientY - (rect.top+50);
-  let dist = Math.hypot(dx,dy);
-  if(dist>40){
-    dx*=40/dist;
-    dy*=40/dist;
-  }
-  stick.style.left = (dx+30)+"px";
-  stick.style.top = (dy+30)+"px";
-  joy.x = dx/40;
-  joy.y = dy/40;
-});
-
-joyDiv.addEventListener("touchend",()=>{
-  joy.x=0; joy.y=0;
-  stick.style.left="30px";
-  stick.style.top="30px";
-});
-
-// movement loop
 function update(){
-  let speed = 0.08;
-  let nx = player.x + joy.x*speed;
-  let ny = player.y + joy.y*speed;
+ let speed=0.08;
+ let nx=player.x+joy.x*speed;
+ let ny=player.y+joy.y*speed;
 
-  if(grid[Math.floor(ny)] && grid[Math.floor(ny)][Math.floor(nx)]===0){
-    player.x = nx;
-    player.y = ny;
-  }
+ if(maze[Math.floor(ny)][Math.floor(nx)]=="0"){
+   player.x=nx;
+   player.y=ny;
+ }
 
-  draw();
-  requestAnimationFrame(update);
+ draw();
+ requestAnimationFrame(update);
 }
 
 function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+ ctx.clearRect(0,0,c.width,c.height);
 
-  let cell = Math.min(canvas.width,canvas.height)/cols;
+ let size = Math.min(c.width/15, c.height/11);
 
-  // maze
-  for(let y=0;y<rows;y++){
-    for(let x=0;x<cols;x++){
-      if(grid[y][x]===1){
-        ctx.fillStyle="#3b2f2f";
-        ctx.fillRect(x*cell,y*cell,cell,cell);
-      }
+ // center maze
+ let offsetX = (c.width - size*15)/2;
+ let offsetY = (c.height - size*11)/2;
+
+ // draw maze
+ for(let y=0;y<maze.length;y++){
+  for(let x=0;x<maze[0].length;x++){
+    if(maze[y][x]=="1"){
+      ctx.fillStyle="#2c3e50";
+      ctx.fillRect(offsetX+x*size,offsetY+y*size,size,size);
     }
   }
+ }
 
-  // player (heart)
-  ctx.fillStyle="white";
-  ctx.font = cell+"px serif";
-  ctx.fillText("❤",player.x*cell,player.y*cell);
-
-  // goal
-  ctx.fillStyle="gold";
-  ctx.fillRect(goal.x*cell,goal.y*cell,cell,cell);
+ // player
+ ctx.font = size+"px serif";
+ ctx.fillText("❤",
+  offsetX+player.x*size,
+  offsetY+player.y*size
+ );
 }
-
-// audio unlock
-document.body.addEventListener("click",()=>{
-  document.getElementById("audio").play();
-  document.getElementById("ui").innerText="";
-},{once:true});
 
 update();
 </script>
