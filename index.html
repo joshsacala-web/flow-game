@@ -2,44 +2,50 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Heart Maze Game</title>
+<title>Heart Maze</title>
 <style>
-body { margin:0; background:black; overflow:hidden; }
+body { margin:0; background:#000; overflow:hidden; font-family:sans-serif;}
 canvas { display:block; }
+
+#ui {
+ position:absolute; top:10px; width:100%;
+ text-align:center; color:#fff;
+}
 
 #joystick {
  position:absolute;
  bottom:30px;
  left:50%;
  transform:translateX(-50%);
- width:110px; height:110px;
+ width:120px; height:120px;
  border-radius:50%;
- background:rgba(255,255,255,0.15);
+ background:rgba(255,255,255,0.12);
 }
 
 #stick {
  position:absolute;
- width:40px; height:40px;
+ width:50px; height:50px;
  border-radius:50%;
  background:#00eaff;
  left:35px; top:35px;
+ box-shadow:0 0 20px #00eaff;
 }
 </style>
 </head>
 
 <body>
 
+<div id="ui">Tap screen for sound</div>
 <canvas id="game"></canvas>
 <div id="joystick"><div id="stick"></div></div>
 
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-
 canvas.width = innerWidth;
 canvas.height = innerHeight;
 
-const size = 20;
+const size = 18;
 const cols = 31;
 const rows = 31;
 
@@ -48,32 +54,61 @@ let player = {x:15,y:25};
 
 let joyX=0, joyY=0;
 
-function inHeart(x,y){
- let nx = (x-cols/2)/(cols/2);
- let ny = (y-rows/2)/(rows/2);
- return Math.pow(nx*nx+ny*ny-1,3) - nx*nx*ny*ny*ny < 0;
+// 🎵 SOUND (ocean style)
+let audioCtx, playing=false;
+function startSound(){
+ if(playing) return;
+ audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+ let osc = audioCtx.createOscillator();
+ let gain = audioCtx.createGain();
+
+ osc.type="sine";
+ osc.frequency.value=80;
+
+ gain.gain.value=0.05;
+
+ osc.connect(gain);
+ gain.connect(audioCtx.destination);
+ osc.start();
+
+ playing=true;
+ document.getElementById("ui").innerText="";
 }
 
+document.body.addEventListener("click", startSound);
+
+// ❤️ BETTER HEART SHAPE
+function inHeart(x,y){
+ let nx=(x-cols/2)/(cols/2);
+ let ny=(y-rows/2)/(rows/2);
+ return (nx*nx + ny*ny - 1)**3 - nx*nx*ny*ny*ny < -0.02;
+}
+
+// 🧠 MAZE GENERATOR (cleaner)
 function generate(){
- grid = Array.from({length:rows},()=>Array(cols).fill(1));
+ grid = Array.from({length:rows},()=>Array(cols).fill(2));
 
  function carve(x,y){
-  let dirs=[[1,0],[-1,0],[0,1],[0,-1]].sort(()=>Math.random()-0.5);
+  let dirs=[[1,0],[-1,0],[0,1],[0,-1]]
+    .sort(()=>Math.random()-0.5);
+
   for(let [dx,dy] of dirs){
    let nx=x+dx*2, ny=y+dy*2;
 
-   if(grid[ny] && grid[ny][nx]===1 && inHeart(nx,ny)){
-     grid[ny][nx]=0;
-     grid[y+dy][x+dx]=0;
-     carve(nx,ny);
+   if(ny>0 && ny<rows-1 && nx>0 && nx<cols-1){
+    if(grid[ny][nx]===1){
+      grid[ny][nx]=0;
+      grid[y+dy][x+dx]=0;
+      carve(nx,ny);
+    }
    }
   }
  }
 
+ // fill heart
  for(let y=0;y<rows;y++){
   for(let x=0;x<cols;x++){
     if(inHeart(x,y)) grid[y][x]=1;
-    else grid[y][x]=2;
   }
  }
 
@@ -81,18 +116,19 @@ function generate(){
  carve(player.x,player.y);
 }
 
+// 🎮 JOYSTICK
 const stick=document.getElementById("stick");
 
 document.getElementById("joystick").addEventListener("touchmove", e=>{
  let rect=e.target.getBoundingClientRect();
- let x=e.touches[0].clientX-rect.left-55;
- let y=e.touches[0].clientY-rect.top-55;
+ let x=e.touches[0].clientX-rect.left-60;
+ let y=e.touches[0].clientY-rect.top-60;
 
  joyX=Math.max(-1,Math.min(1,x/40));
  joyY=Math.max(-1,Math.min(1,y/40));
 
- stick.style.left=(55+joyX*30)+"px";
- stick.style.top=(55+joyY*30)+"px";
+ stick.style.left=(60+joyX*30)+"px";
+ stick.style.top=(60+joyY*30)+"px";
 });
 
 document.getElementById("joystick").addEventListener("touchend", ()=>{
@@ -101,26 +137,22 @@ document.getElementById("joystick").addEventListener("touchend", ()=>{
  stick.style.top="35px";
 });
 
+// 🚶 MOVEMENT (smooth)
 function move(){
- let dx=0, dy=0;
+ let speed=0.15;
+ player.x+=joyX*speed;
+ player.y+=joyY*speed;
 
- if(Math.abs(joyX)>Math.abs(joyY)){
-   dx = joyX>0.5?1:joyX<-0.5?-1:0;
- } else {
-   dy = joyY>0.5?1:joyY<-0.5?-1:0;
- }
+ let gx=Math.round(player.x);
+ let gy=Math.round(player.y);
 
- let nx=player.x+dx;
- let ny=player.y+dy;
-
- if(grid[ny] && grid[ny][nx]===0){
-   player.x=nx;
-   player.y=ny;
+ if(grid[gy] && grid[gy][gx]!==0){
+   player.x-=joyX*speed;
+   player.y-=joyY*speed;
  }
 }
 
-generate();
-
+// 🎨 DRAW
 function draw(){
  ctx.clearRect(0,0,canvas.width,canvas.height);
 
@@ -131,25 +163,30 @@ function draw(){
   for(let x=0;x<cols;x++){
    if(grid[y][x]===2) continue;
 
-   ctx.fillStyle = grid[y][x] ? "#222" : "#111";
+   ctx.fillStyle = grid[y][x] ? "#111" : "#222";
    ctx.fillRect(offX+x*size, offY+y*size, size, size);
   }
  }
 
  move();
 
- ctx.fillStyle="#00eaff";
+ // player glow
+ let px=offX+player.x*size+size/2;
+ let py=offY+player.y*size+size/2;
+
+ let grad=ctx.createRadialGradient(px,py,2,px,py,15);
+ grad.addColorStop(0,"#00eaff");
+ grad.addColorStop(1,"transparent");
+
+ ctx.fillStyle=grad;
  ctx.beginPath();
- ctx.arc(
-   offX+player.x*size+size/2,
-   offY+player.y*size+size/2,
-   8,0,Math.PI*2
- );
+ ctx.arc(px,py,15,0,Math.PI*2);
  ctx.fill();
 
  requestAnimationFrame(draw);
 }
 
+generate();
 draw();
 </script>
 
