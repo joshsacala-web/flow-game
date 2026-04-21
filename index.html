@@ -1,5 +1,4 @@
-
-   <!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -77,16 +76,15 @@ const ctx = c.getContext("2d");
 c.width = innerWidth;
 c.height = innerHeight;
 
-let size = 41;
+let size = 35; // ⭐ balanced difficulty
 
-// SAME MAZE
 function generateMaze(n){
  let grid = Array.from({length:n},()=>Array(n).fill(1));
 
  function carve(x,y){
   grid[y][x]=0;
   let dirs=[[2,0],[-2,0],[0,2],[0,-2]]
-    .sort(()=>Math.random()-0.5);
+    .sort(()=>Math.random()-0.3); // smoother flow
 
   for(let [dx,dy] of dirs){
     let nx=x+dx, ny=y+dy;
@@ -114,7 +112,7 @@ let joy={x:0,y:0};
 let startTime=null;
 let finished=false;
 
-// 🎮 JOYSTICK
+// 🎮 joystick
 const joyDiv=document.getElementById("joy");
 const stick=document.getElementById("stick");
 
@@ -141,7 +139,7 @@ joyDiv.ontouchend=()=>{
  stick.style.top="35px";
 };
 
-// 🎵 MUSIC
+// 🎵 music start
 document.body.addEventListener("touchstart",()=>{
  if(!startTime){
    startTime=Date.now();
@@ -152,17 +150,16 @@ document.body.addEventListener("touchstart",()=>{
  }
 },{once:true});
 
-// 🔒 SOLID COLLISION
+// 🔒 collision
 function isWall(x,y){
  return grid[Math.floor(y)]?.[Math.floor(x)] !== 0;
 }
 
 function move(){
  let speed=0.05;
+ let steps=3;
 
- let steps = 3; // break movement into smaller steps
  for(let i=0;i<steps;i++){
-
    let nx = player.x + (joy.x * speed / steps);
    if(!isWall(nx, player.y)) player.x = nx;
 
@@ -177,14 +174,12 @@ function update(){
 
  move();
 
- // checkpoint
  if(!reachedCheckpoint &&
    Math.floor(player.x)===checkpoint.x &&
    Math.floor(player.y)===checkpoint.y){
    reachedCheckpoint=true;
  }
 
- // win
  if(Math.floor(player.x)===goal.x &&
     Math.floor(player.y)===goal.y){
 
