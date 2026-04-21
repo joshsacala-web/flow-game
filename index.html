@@ -3,8 +3,18 @@
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body { margin:0; background:#1e2a38; overflow:hidden; }
+body { margin:0; background:#0b1a26; overflow:hidden; }
 canvas { display:block; margin:auto; }
+
+#ui{
+ position:fixed;
+ top:10px;
+ width:100%;
+ text-align:center;
+ color:white;
+ font-family:sans-serif;
+ font-size:18px;
+}
 
 #joy {
  position:fixed;
@@ -26,12 +36,10 @@ canvas { display:block; margin:auto; }
 </head>
 <body>
 
+<div id="ui">Lives: 7 | Time: 120</div>
+
 <canvas id="c"></canvas>
 <div id="joy"><div id="stick"></div></div>
-
-<audio id="audio" loop>
-<source src="https://cdn.pixabay.com/audio/2022/03/15/audio_115b9b4b6f.mp3">
-</audio>
 
 <script>
 const c = document.getElementById("c");
@@ -44,25 +52,42 @@ function resize(){
 resize();
 onresize = resize;
 
-// SIMPLE HEART MAZE (clean, not broken)
+// BIGGER MAZE (~2 min play)
 const maze = [
-"111111111111111",
-"100000111000001",
-"101110111011101",
-"101000000000101",
-"101011111110101",
-"100010000010001",
-"111010111010111",
-"100000101000001",
-"101111101111101",
-"100000000000001",
-"111111111111111"
+"1111111111111111111",
+"1000000000100000001",
+"1011111110101111101",
+"1010000010001000101",
+"1010111011111010101",
+"1000101000001010001",
+"1110101011101010111",
+"1000001000100010001",
+"1011111010111011101",
+"1000000010000010001",
+"1110111110111110101",
+"1000100000100000101",
+"1011101111101110101",
+"1010000000001000101",
+"1010111111111011101",
+"1000000000000000001",
+"1111111111111111101"
 ];
 
-let player = {x:1.5,y:1.5};
+let start = {x:1.5,y:1.5};
+let goal = {x:17.5,y:15.5};
+let player = {...start};
 
+let lives = 7;
+let time = 120;
+
+setInterval(()=>{
+ if(time>0) time--;
+ document.getElementById("ui").innerText =
+  "Lives: "+lives+" | Time: "+time;
+},1000);
+
+// joystick
 let joy={x:0,y:0};
-
 const stick=document.getElementById("stick");
 const joyDiv=document.getElementById("joy");
 
@@ -83,19 +108,32 @@ joyDiv.ontouchend=()=>{
  stick.style.top="30px";
 };
 
-// AUDIO START
-document.body.onclick=()=>{
- document.getElementById("audio").play();
-};
+function hitWall(x,y){
+ return maze[Math.floor(y)][Math.floor(x)] === "1";
+}
 
 function update(){
  let speed=0.08;
  let nx=player.x+joy.x*speed;
  let ny=player.y+joy.y*speed;
 
- if(maze[Math.floor(ny)][Math.floor(nx)]=="0"){
-   player.x=nx;
-   player.y=ny;
+ if(hitWall(nx,ny)){
+   lives--;
+   player = {...start};
+
+   if(lives <= 0){
+     alert("Game Over");
+     location.reload();
+   }
+ } else {
+   player.x = nx;
+   player.y = ny;
+ }
+
+ // win
+ if(Math.hypot(player.x-goal.x, player.y-goal.y) < 0.5){
+   alert("You Win!");
+   location.reload();
  }
 
  draw();
@@ -105,23 +143,34 @@ function update(){
 function draw(){
  ctx.clearRect(0,0,c.width,c.height);
 
- let size = Math.min(c.width/15, c.height/11);
+ let size = Math.min(c.width/19, c.height/17);
 
- // center maze
- let offsetX = (c.width - size*15)/2;
- let offsetY = (c.height - size*11)/2;
+ let offsetX = (c.width - size*19)/2;
+ let offsetY = (c.height - size*17)/2;
 
- // draw maze
  for(let y=0;y<maze.length;y++){
   for(let x=0;x<maze[0].length;x++){
+
     if(maze[y][x]=="1"){
-      ctx.fillStyle="#2c3e50";
-      ctx.fillRect(offsetX+x*size,offsetY+y*size,size,size);
+      ctx.fillStyle="#000000"; // walls
+    } else {
+      ctx.fillStyle="#0a3d62"; // path
     }
+
+    ctx.fillRect(offsetX+x*size,offsetY+y*size,size,size);
   }
  }
 
- // player
+ // start
+ ctx.fillStyle="lime";
+ ctx.fillRect(offsetX+start.x*size,offsetY+start.y*size,size,size);
+
+ // goal
+ ctx.fillStyle="gold";
+ ctx.fillRect(offsetX+goal.x*size,offsetY+goal.y*size,size,size);
+
+ // player ❤️
+ ctx.fillStyle="red";
  ctx.font = size+"px serif";
  ctx.fillText("❤",
   offsetX+player.x*size,
