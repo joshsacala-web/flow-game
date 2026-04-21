@@ -2,28 +2,50 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Maze Game</title>
-<style>
-body { margin:0; background:#0a1a1f; overflow:hidden; }
-canvas { display:block; }
+<title>Heart Maze</title>
 
-#overlay {
- position:absolute; width:100%; height:100%;
- display:flex; justify-content:center; align-items:center;
- flex-direction:column; color:white;
+<style>
+body {
+  margin:0;
+  overflow:hidden;
+  background:black;
 }
 
+canvas {
+  display:block;
+}
+
+/* 🎮 bottom-center joystick */
 #joystick {
- position:absolute; bottom:40px; left:30px;
- width:100px; height:100px;
- border-radius:50%;
- background:rgba(255,255,255,0.15);
+  position:absolute;
+  bottom:30px;
+  left:50%;
+  transform:translateX(-50%);
+  width:110px;
+  height:110px;
+  border-radius:50%;
+  background:rgba(255,255,255,0.15);
 }
 
 #stick {
- position:absolute; width:40px; height:40px;
- border-radius:50%; background:#00eaff;
- left:30px; top:30px;
+  position:absolute;
+  width:44px;
+  height:44px;
+  border-radius:50%;
+  background:#00eaff;
+  left:33px;
+  top:33px;
+}
+
+#overlay {
+  position:absolute;
+  width:100%;
+  height:100%;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  flex-direction:column;
+  color:white;
 }
 </style>
 </head>
@@ -31,8 +53,8 @@ canvas { display:block; }
 <body>
 
 <div id="overlay">
-<h1>Maze</h1>
-<button onclick="start()">Start</button>
+  <h1>❤️ Heart Maze</h1>
+  <button onclick="start()">Start</button>
 </div>
 
 <canvas id="game"></canvas>
@@ -40,133 +62,137 @@ canvas { display:block; }
 <div id="joystick"><div id="stick"></div></div>
 
 <audio id="music" loop>
-<source src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_5c6f1b7b1b.mp3">
+  <source src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_5c6f1b7b1b.mp3">
 </audio>
 
 <script>
-const canvas=document.getElementById("game");
-const ctx=canvas.getContext("2d");
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
-canvas.width=innerWidth;
-canvas.height=innerHeight;
+canvas.width = innerWidth;
+canvas.height = innerHeight;
 
-const size=24, cols=21, rows=21;
+const size = 25;
+const cols = 21;
+const rows = 21;
 
-let grid=[], player, goal;
+let grid = [];
+let player = {x:1, y:1, size:8};
+let hearts = [];
+
 let joyX=0, joyY=0;
-let started=false, startTime=0;
 
+// 🧠 maze
 function generate(){
- grid=Array.from({length:rows},()=>Array(cols).fill(1));
+  grid = Array.from({length:rows},()=>Array(cols).fill(1));
 
- function carve(x,y){
-  let dirs=[[1,0],[-1,0],[0,1],[0,-1]].sort(()=>Math.random()-0.5);
-  for(let [dx,dy] of dirs){
-   let nx=x+dx*2, ny=y+dy*2;
-   if(grid[ny] && grid[ny][nx]===1){
-    grid[ny][nx]=0;
-    grid[y+dy][x+dx]=0;
-    carve(nx,ny);
-   }
+  function carve(x,y){
+    let dirs=[[1,0],[-1,0],[0,1],[0,-1]].sort(()=>Math.random()-0.5);
+    for(let [dx,dy] of dirs){
+      let nx=x+dx*2, ny=y+dy*2;
+      if(grid[ny] && grid[ny][nx]===1){
+        grid[ny][nx]=0;
+        grid[y+dy][x+dx]=0;
+        carve(nx,ny);
+      }
+    }
   }
- }
 
- player={x:1,y:1};
- goal={x:cols-2,y:rows-2};
+  grid[player.y][player.x]=0;
+  carve(player.x,player.y);
 
- grid[player.y][player.x]=0;
- carve(player.x,player.y);
- grid[goal.y][goal.x]=0;
+  // ❤️ spawn hearts
+  hearts = [];
+  for(let i=0;i<10;i++){
+    let x,y;
+    do{
+      x=Math.floor(Math.random()*cols);
+      y=Math.floor(Math.random()*rows);
+    }while(grid[y][x]!==0);
+    hearts.push({x,y});
+  }
 }
 
-// joystick
+// 🎮 joystick
 const stick=document.getElementById("stick");
 
 document.getElementById("joystick").addEventListener("touchmove", e=>{
- let rect=e.target.getBoundingClientRect();
- let x=e.touches[0].clientX-rect.left-50;
- let y=e.touches[0].clientY-rect.top-50;
+  let rect=e.target.getBoundingClientRect();
+  let x=e.touches[0].clientX-rect.left-55;
+  let y=e.touches[0].clientY-rect.top-55;
 
- joyX=Math.max(-1,Math.min(1,x/40));
- joyY=Math.max(-1,Math.min(1,y/40));
+  joyX=Math.max(-1,Math.min(1,x/40));
+  joyY=Math.max(-1,Math.min(1,y/40));
 
- stick.style.left=(50+joyX*30)+"px";
- stick.style.top=(50+joyY*30)+"px";
-
- if(!started){
-  started=true;
-  startTime=Date.now();
- }
+  stick.style.left=(55+joyX*30)+"px";
+  stick.style.top=(55+joyY*30)+"px";
 });
 
 document.getElementById("joystick").addEventListener("touchend", ()=>{
- joyX=0; joyY=0;
- stick.style.left="30px";
- stick.style.top="30px";
+  joyX=0; joyY=0;
+  stick.style.left="33px";
+  stick.style.top="33px";
 });
 
-// move
+// movement
 function move(){
- let nx=player.x+(joyX>0.5?1:joyX<-0.5?-1:0);
- let ny=player.y+(joyY>0.5?1:joyY<-0.5?-1:0);
+  let nx=player.x+(joyX>0.5?1:joyX<-0.5?-1:0);
+  let ny=player.y+(joyY>0.5?1:joyY<-0.5?-1:0);
 
- if(grid[ny] && grid[ny][nx]===0){
-  player.x=nx;
-  player.y=ny;
- }
+  if(grid[ny] && grid[ny][nx]===0){
+    player.x=nx;
+    player.y=ny;
+  }
 }
 
 // start
 function start(){
- generate();
- document.getElementById("overlay").style.display="none";
+  generate();
+  document.getElementById("overlay").style.display="none";
 
- let music=document.getElementById("music");
- music.volume=0.4;
- music.play().catch(()=>{});
+  let music=document.getElementById("music");
+  music.volume=0.4;
+  music.play().catch(()=>{});
 }
 
 // draw
 function draw(){
- ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
- let offX=(canvas.width-cols*size)/2;
- let offY=(canvas.height-rows*size)/2;
+  let offX=(canvas.width-cols*size)/2;
+  let offY=(canvas.height-rows*size)/2;
 
- if(started){
-  let t=(Date.now()-startTime)/1000;
-  document.title="Time: "+t.toFixed(1);
- }
-
- for(let y=0;y<rows;y++){
-  for(let x=0;x<cols;x++){
-   ctx.fillStyle = grid[y][x] ? "#1f3a40" : "#0f2a30";
-   ctx.fillRect(offX+x*size, offY+y*size, size, size);
+  // maze
+  for(let y=0;y<rows;y++){
+    for(let x=0;x<cols;x++){
+      ctx.fillStyle = grid[y][x] ? "#222" : "#111";
+      ctx.fillRect(offX+x*size, offY+y*size, size, size);
+    }
   }
- }
 
- if(player){
   move();
 
-  ctx.fillStyle="lime";
-  ctx.fillRect(offX+size,offY+size,size,size);
+  // ❤️ draw hearts
+  ctx.fillStyle="pink";
+  hearts.forEach((h,i)=>{
+    ctx.beginPath();
+    ctx.arc(offX+h.x*size+12, offY+h.y*size+12, 6, 0, Math.PI*2);
+    ctx.fill();
 
-  ctx.fillStyle="gold";
-  ctx.fillRect(offX+goal.x*size,offY+goal.y*size,size,size);
+    // collect
+    if(h.x===player.x && h.y===player.y){
+      hearts.splice(i,1);
+      player.size += 1.5; // grow
+    }
+  });
 
+  // 🔵 player
   ctx.fillStyle="#00eaff";
   ctx.beginPath();
-  ctx.arc(offX+player.x*size+12,offY+player.y*size+12,8,0,Math.PI*2);
+  ctx.arc(offX+player.x*size+12, offY+player.y*size+12, player.size, 0, Math.PI*2);
   ctx.fill();
 
-  if(player.x===goal.x && player.y===goal.y){
-   let t=((Date.now()-startTime)/1000).toFixed(1);
-   alert("Finished in "+t+"s");
-   location.reload();
-  }
- }
-
- requestAnimationFrame(draw);
+  requestAnimationFrame(draw);
 }
 
 draw();
