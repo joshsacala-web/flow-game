@@ -5,7 +5,6 @@
 <style>
 body { margin:0; background:black; overflow:hidden; }
 canvas { display:block; }
-
 #ui{
  position:fixed;
  top:10px;
@@ -14,59 +13,12 @@ canvas { display:block; }
  color:white;
  font-family:sans-serif;
 }
-
-#end{
- position:fixed;
- top:50%;
- left:50%;
- transform:translate(-50%,-50%);
- display:none;
- color:white;
- text-align:center;
-}
-
-#joy{
- position:fixed;
- bottom:40px;
- left:50%;
- transform:translateX(-50%);
- width:120px;
- height:120px;
- border-radius:50%;
- background:rgba(255,255,255,0.08);
-}
-#stick{
- position:absolute;
- width:50px;
- height:50px;
- border-radius:50%;
- background:#ffd166;
- left:35px;
- top:35px;
-}
-button{
- padding:10px 20px;
- margin-top:10px;
- font-size:18px;
-}
 </style>
 </head>
 <body>
 
-<div id="ui">Tap to start</div>
-
-<div id="end">
-  <h2 id="time"></h2>
-  <h3 id="flow"></h3>
-  <button onclick="restart()">Play Again</button>
-</div>
-
+<div id="ui">Tap to Start</div>
 <canvas id="c"></canvas>
-<div id="joy"><div id="stick"></div></div>
-
-<audio id="music" loop>
-<source src="https://cdn.pixabay.com/audio/2022/03/15/audio_115b9b4b6f.mp3">
-</audio>
 
 <script>
 const c = document.getElementById("c");
@@ -75,202 +27,132 @@ const ctx = c.getContext("2d");
 c.width = innerWidth;
 c.height = innerHeight;
 
-let size = 35;
+const size = 15;
+const cell = Math.min(c.width,c.height)/size;
 
-// MAZE
-function generateMaze(n){
- let grid = Array.from({length:n},()=>Array(n).fill(1));
- function carve(x,y){
-  grid[y][x]=0;
-  let dirs=[[2,0],[-2,0],[0,2],[0,-2]]
-    .sort(()=>Math.random()-0.3);
-  for(let [dx,dy] of dirs){
-    let nx=x+dx, ny=y+dy;
-    if(ny>0&&ny<n&&nx>0&&nx<n && grid[ny][nx]===1){
-      grid[y+dy/2][x+dx/2]=0;
-      carve(nx,ny);
-    }
-  }
+let map = [
+[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+[1,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+[1,0,1,1,1,0,1,0,1,1,1,1,1,0,1],
+[1,0,0,0,1,0,0,0,0,0,0,0,1,0,1],
+[1,1,1,0,1,1,1,1,1,1,1,0,1,0,1],
+[1,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
+[1,0,1,1,1,1,1,1,1,0,1,1,1,0,1],
+[1,0,0,0,0,0,0,0,1,0,0,0,1,0,1],
+[1,1,1,1,1,1,1,0,1,1,1,0,1,0,1],
+[1,0,0,0,0,0,1,0,0,0,1,0,0,0,1],
+[1,0,1,1,1,0,1,1,1,0,1,1,1,0,1],
+[1,0,0,0,1,0,0,0,1,0,0,0,1,0,1],
+[1,1,1,0,1,1,1,0,1,1,1,0,1,0,1],
+[1,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+];
+
+let player = {x:1,y:1,dx:0,dy:0};
+let nextDir = {x:0,y:0};
+
+let pellets = [];
+for(let y=0;y<size;y++){
+ for(let x=0;x<size;x++){
+   if(map[y][x]===0) pellets.push({x,y});
  }
- carve(1,1);
- return grid;
 }
 
-let grid = generateMaze(size);
+let score = 0;
+let started=false;
 
-let player={x:1.5,y:1.5};
-let goal={x:size-2,y:size-2};
-
-let checkpoint={x:Math.floor(size/2),y:Math.floor(size/2)};
-let reachedCheckpoint=false;
-
-let joy={x:0,y:0};
-
-let startTime=null;
-let finished=false;
-
-// 🔥 FLOW SYSTEM
-let flow = 0;
-let bestFlow = 0;
-
-// joystick
-const joyDiv=document.getElementById("joy");
-const stick=document.getElementById("stick");
-
-joyDiv.ontouchmove=e=>{
- let r=joyDiv.getBoundingClientRect();
+// controls (tap direction)
+document.addEventListener("touchstart",e=>{
  let t=e.touches[0];
- let dx=t.clientX-(r.left+60);
- let dy=t.clientY-(r.top+60);
- let d=Math.hypot(dx,dy);
- if(d>40){ dx*=40/d; dy*=40/d; }
- stick.style.left=(dx+35)+"px";
- stick.style.top=(dy+35)+"px";
- joy.x=dx/40;
- joy.y=dy/40;
-};
+ let x=t.clientX;
+ let y=t.clientY;
 
-joyDiv.ontouchend=()=>{
- joy.x=0; joy.y=0;
- stick.style.left="35px";
- stick.style.top="35px";
-};
+ let cx=c.width/2;
+ let cy=c.height/2;
 
-// music
-document.body.addEventListener("touchstart",()=>{
- if(!startTime){
-   startTime=Date.now();
+ if(Math.abs(x-cx)>Math.abs(y-cy)){
+   nextDir = {x:(x>cx?1:-1),y:0};
+ }else{
+   nextDir = {x:0,y:(y>cy?1:-1)};
+ }
+
+ if(!started){
+   started=true;
    document.getElementById("ui").innerText="";
-   let music=document.getElementById("music");
-   music.volume=0.4;
-   music.play().catch(()=>{});
  }
-},{once:true});
+});
 
-// collision
-function isWall(x,y){
- if(x<1 || y<1 || x>size-2 || y>size-2) return true;
- return grid[Math.floor(y)][Math.floor(x)] !== 0;
-}
-
-function move(){
- let speed=0.05;
- let steps=4;
-
- let hitWall = false;
-
- for(let i=0;i<steps;i++){
-   let nx = player.x + (joy.x * speed / steps);
-   if(!isWall(nx, player.y)) player.x = nx;
-   else hitWall = true;
-
-   let ny = player.y + (joy.y * speed / steps);
-   if(!isWall(player.x, ny)) player.y = ny;
-   else hitWall = true;
- }
-
- // 🔥 FLOW LOGIC
- if(hitWall){
-   flow = 0;
- } else if(Math.abs(joy.x) > 0.1 || Math.abs(joy.y) > 0.1){
-   flow += 0.02;
-   if(flow > bestFlow) bestFlow = flow;
- }
-}
-
+// movement
 function update(){
- if(finished) return;
+ if(!started) return;
 
- move();
+ let nx = player.x + nextDir.x;
+ let ny = player.y + nextDir.y;
 
- if(!reachedCheckpoint &&
-   Math.floor(player.x)===checkpoint.x &&
-   Math.floor(player.y)===checkpoint.y){
-   reachedCheckpoint=true;
+ if(map[ny][nx]===0){
+   player.dx = nextDir.x;
+   player.dy = nextDir.y;
  }
 
- if(Math.floor(player.x)===goal.x &&
-    Math.floor(player.y)===goal.y){
+ nx = player.x + player.dx;
+ ny = player.y + player.dy;
 
-   finished=true;
-
-   let t=((Date.now()-startTime)/1000).toFixed(1);
-
-   document.getElementById("time").innerText="Time: "+t+"s";
-   document.getElementById("flow").innerText="Flow: "+bestFlow.toFixed(1);
-
-   document.getElementById("end").style.display="block";
+ if(map[ny][nx]===0){
+   player.x = nx;
+   player.y = ny;
  }
+
+ // eat pellets
+ pellets = pellets.filter(p=>{
+   if(p.x===player.x && p.y===player.y){
+     score++;
+     return false;
+   }
+   return true;
+ });
 }
 
+// draw heart
+function drawHeart(x,y,size){
+ ctx.fillStyle="red";
+ ctx.beginPath();
+ ctx.moveTo(x,y);
+ ctx.bezierCurveTo(x,y-size/2,x-size,y-size/2,x-size,y);
+ ctx.bezierCurveTo(x-size,y+size/2,x,y+size,x,y+size);
+ ctx.bezierCurveTo(x,y+size,x+size,y+size/2,x+size,y);
+ ctx.bezierCurveTo(x+size,y-size/2,x,y-size/2,x,y);
+ ctx.fill();
+}
+
+// draw
 function draw(){
  ctx.fillStyle="black";
  ctx.fillRect(0,0,c.width,c.height);
 
- let cell = Math.min(c.width,c.height)/size;
- let ox=(c.width-cell*size)/2;
- let oy=(c.height-cell*size)/2;
-
  for(let y=0;y<size;y++){
   for(let x=0;x<size;x++){
-    if(grid[y][x]===0){
+    if(map[y][x]===1){
       ctx.fillStyle="#0a3d62";
-      ctx.fillRect(ox+x*cell,oy+y*cell,cell,cell);
+      ctx.fillRect(x*cell,y*cell,cell,cell);
     }
   }
  }
 
- ctx.fillStyle="green";
- ctx.fillRect(ox+cell,oy+cell,cell,cell);
+ // pellets
+ pellets.forEach(p=>{
+   drawHeart(p.x*cell+cell/2,p.y*cell+cell/2,3);
+ });
 
- ctx.fillStyle="yellow";
- ctx.fillRect(ox+goal.x*cell,oy+goal.y*cell,cell,cell);
+ // player
+ drawHeart(player.x*cell+cell/2,player.y*cell+cell/2,cell/4);
 
- if(!reachedCheckpoint){
-   ctx.fillStyle="cyan";
-   ctx.fillRect(ox+checkpoint.x*cell,oy+checkpoint.y*cell,cell,cell);
- }
-
- // 🔥 glow increases with flow
- let glow = 10 + flow * 30;
-
- ctx.shadowColor="red";
- ctx.shadowBlur=glow;
-
- ctx.fillStyle="red";
- ctx.beginPath();
- ctx.arc(
-   ox+player.x*cell+cell/2,
-   oy+player.y*cell+cell/2,
-   reachedCheckpoint?cell*0.45:cell*0.3,
-   0,Math.PI*2
- );
- ctx.fill();
-
- ctx.shadowBlur=0;
-
- if(startTime && !finished){
-  let t=((Date.now()-startTime)/1000).toFixed(1);
-  document.getElementById("ui").innerText=
-    "Time: "+t+"s | Flow: "+flow.toFixed(1);
- }
+ document.getElementById("ui").innerText="Score: "+score;
 }
 
 function loop(){
  update();
  draw();
  requestAnimationFrame(loop);
-}
-
-function restart(){
- grid = generateMaze(size);
- player={x:1.5,y:1.5};
- reachedCheckpoint=false;
- flow=0;
- bestFlow=0;
- startTime=Date.now();
- finished=false;
- document.getElementById("end").style.display="none";
 }
 
 loop();
