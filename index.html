@@ -1,4 +1,5 @@
-<!DOCTYPE html>
+
+   <!DOCTYPE html>
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -102,7 +103,7 @@ function generateMaze(n){
 
 let grid = generateMaze(size);
 
-let player={x:1,y:1};
+let player={x:1.5,y:1.5};
 let goal={x:size-2,y:size-2};
 
 let checkpoint={x:Math.floor(size/2),y:Math.floor(size/2)};
@@ -113,7 +114,7 @@ let joy={x:0,y:0};
 let startTime=null;
 let finished=false;
 
-// 🎮 REAL JOYSTICK
+// 🎮 JOYSTICK
 const joyDiv=document.getElementById("joy");
 const stick=document.getElementById("stick");
 
@@ -140,7 +141,7 @@ joyDiv.ontouchend=()=>{
  stick.style.top="35px";
 };
 
-// 🎵 GUARANTEED MUSIC START
+// 🎵 MUSIC
 document.body.addEventListener("touchstart",()=>{
  if(!startTime){
    startTime=Date.now();
@@ -151,21 +152,30 @@ document.body.addEventListener("touchstart",()=>{
  }
 },{once:true});
 
-function canMove(x,y){
- return grid[Math.floor(y)]?.[Math.floor(x)]===0;
+// 🔒 SOLID COLLISION
+function isWall(x,y){
+ return grid[Math.floor(y)]?.[Math.floor(x)] !== 0;
+}
+
+function move(){
+ let speed=0.05;
+
+ let steps = 3; // break movement into smaller steps
+ for(let i=0;i<steps;i++){
+
+   let nx = player.x + (joy.x * speed / steps);
+   if(!isWall(nx, player.y)) player.x = nx;
+
+   let ny = player.y + (joy.y * speed / steps);
+   if(!isWall(player.x, ny)) player.y = ny;
+ }
 }
 
 function update(){
 
  if(finished) return;
 
- let speed=0.08;
-
- let nx=player.x+joy.x*speed;
- let ny=player.y+joy.y*speed;
-
- if(canMove(nx,player.y)) player.x=nx;
- if(canMove(player.x,ny)) player.y=ny;
+ move();
 
  // checkpoint
  if(!reachedCheckpoint &&
@@ -204,21 +214,17 @@ function draw(){
   }
  }
 
- // start
  ctx.fillStyle="green";
  ctx.fillRect(ox+cell,oy+cell,cell,cell);
 
- // goal
  ctx.fillStyle="yellow";
  ctx.fillRect(ox+goal.x*cell,oy+goal.y*cell,cell,cell);
 
- // checkpoint
  if(!reachedCheckpoint){
    ctx.fillStyle="cyan";
    ctx.fillRect(ox+checkpoint.x*cell,oy+checkpoint.y*cell,cell,cell);
  }
 
- // ❤️ player
  let r = reachedCheckpoint ? cell*0.45 : cell*0.3;
 
  ctx.fillStyle="red";
@@ -230,7 +236,6 @@ function draw(){
  );
  ctx.fill();
 
- // timer
  if(startTime && !finished){
   let t=((Date.now()-startTime)/1000).toFixed(1);
   document.getElementById("ui").innerText="Time: "+t+"s";
@@ -245,7 +250,7 @@ function loop(){
 
 function restart(){
  grid = generateMaze(size);
- player={x:1,y:1};
+ player={x:1.5,y:1.5};
  reachedCheckpoint=false;
  startTime=Date.now();
  finished=false;
@@ -254,5 +259,6 @@ function restart(){
 
 loop();
 </script>
+
 </body>
 </html>
