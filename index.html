@@ -15,7 +15,6 @@ canvas { display:block; margin:auto; }
  font-family:sans-serif;
  font-size:18px;
 }
-
 #joy {
  position:fixed;
  bottom:30px;
@@ -23,7 +22,7 @@ canvas { display:block; margin:auto; }
  transform:translateX(-50%);
  width:110px;height:110px;
  border-radius:50%;
- background:rgba(255,255,255,0.1);
+ background:rgba(255,255,255,0.08);
 }
 #stick {
  width:50px;height:50px;
@@ -36,24 +35,24 @@ canvas { display:block; margin:auto; }
 </head>
 <body>
 
-<div id="ui">Lives: 7 | Time: 120</div>
-
+<div id="ui">Tap to begin 🌊</div>
 <canvas id="c"></canvas>
 <div id="joy"><div id="stick"></div></div>
+
+<audio id="audio" loop>
+<source src="https://cdn.pixabay.com/audio/2022/03/15/audio_115b9b4b6f.mp3">
+</audio>
 
 <script>
 const c = document.getElementById("c");
 const ctx = c.getContext("2d");
 
-function resize(){
- c.width = innerWidth;
- c.height = innerHeight;
-}
-resize();
-onresize = resize;
+function resize(){ c.width=innerWidth; c.height=innerHeight; }
+resize(); onresize=resize;
 
-// BIGGER MAZE (~2 min play)
-const maze = [
+// LEVELS
+const levels = [
+[
 "1111111111111111111",
 "1000000000100000001",
 "1011111110101111101",
@@ -71,23 +70,43 @@ const maze = [
 "1010111111111011101",
 "1000000000000000001",
 "1111111111111111101"
+],
+[
+"1111111111111111111",
+"1000000000000000001",
+"1011111111111111101",
+"1010000000000000101",
+"1010111111111110101",
+"1010100000000010101",
+"1010101111111010101",
+"1000101000001010001",
+"1110101011101010111",
+"1000001000100010001",
+"1011111010111011101",
+"1000000010000010001",
+"1110111110111110101",
+"1000100000100000101",
+"1011101111101110101",
+"1000000000000000001",
+"1111111111111111111"
+]
 ];
 
-let start = {x:1.5,y:1.5};
-let goal = {x:17.5,y:15.5};
-let player = {...start};
+let levelIndex=0;
+let maze=levels[levelIndex];
 
-let lives = 7;
-let time = 120;
+let start={x:1.5,y:1.5};
+let goal={x:17.5,y:15.5};
+let player={...start};
 
-setInterval(()=>{
- if(time>0) time--;
- document.getElementById("ui").innerText =
-  "Lives: "+lives+" | Time: "+time;
-},1000);
+let enemy={x:17.5,y:1.5};
+
+let joy={x:0,y:0};
+let startTime=null;
+let finished=false;
+let trail=[];
 
 // joystick
-let joy={x:0,y:0};
 const stick=document.getElementById("stick");
 const joyDiv=document.getElementById("joy");
 
@@ -108,74 +127,138 @@ joyDiv.ontouchend=()=>{
  stick.style.top="30px";
 };
 
-function hitWall(x,y){
- return maze[Math.floor(y)][Math.floor(x)] === "1";
+// audio
+document.body.onclick=()=>{
+ if(!startTime){
+   startTime=Date.now();
+   document.getElementById("audio").volume=0.3;
+   document.getElementById("audio").play();
+ }
+};
+
+function canMove(x,y){
+ return maze[Math.floor(y)][Math.floor(x)]==="0";
 }
 
 function update(){
- let speed=0.08;
- let nx=player.x+joy.x*speed;
- let ny=player.y+joy.y*speed;
 
- if(hitWall(nx,ny)){
-   lives--;
-   player = {...start};
+ if(!finished){
 
-   if(lives <= 0){
-     alert("Game Over");
-     location.reload();
+   let speed=0.06;
+
+   // 🌊 current upward
+   let currentY = -0.01;
+
+   let nx=player.x+joy.x*speed;
+   if(canMove(nx,player.y)) player.x=nx;
+
+   let ny=player.y+joy.y*speed + currentY;
+   if(canMove(player.x,ny)) player.y=ny;
+
+   // trail
+   trail.push({x:player.x,y:player.y});
+   if(trail.length>20) trail.shift();
+
+   // 👾 enemy (slow chase)
+   let dx=player.x-enemy.x;
+   let dy=player.y-enemy.y;
+   let dist=Math.hypot(dx,dy);
+   if(dist>0.1){
+     let ex=enemy.x+dx/dist*0.02;
+     let ey=enemy.y+dy/dist*0.02;
+     if(canMove(ex,enemy.y)) enemy.x=ex;
+     if(canMove(enemy.x,ey)) enemy.y=ey;
    }
- } else {
-   player.x = nx;
-   player.y = ny;
- }
 
- // win
- if(Math.hypot(player.x-goal.x, player.y-goal.y) < 0.5){
-   alert("You Win!");
-   location.reload();
+   // collision with enemy
+   if(Math.hypot(player.x-enemy.x,player.y-enemy.y)<0.5){
+     navigator.vibrate?.(100);
+     player={...start};
+   }
+
+   // win
+   if(Math.hypot(player.x-goal.x,player.y-goal.y)<0.5){
+     finished=true;
+
+     let time=((Date.now()-startTime)/1000).toFixed(1);
+
+     let best = localStorage.getItem("best") || time;
+     if(time < best){ localStorage.setItem("best", time); best=time; }
+
+     document.getElementById("ui").innerText =
+       "Time: "+time+"s | Best: "+best+"s";
+   }
  }
 
  draw();
  requestAnimationFrame(update);
 }
 
+let t=0;
+
 function draw(){
+ t+=0.02;
  ctx.clearRect(0,0,c.width,c.height);
 
- let size = Math.min(c.width/19, c.height/17);
+ // background
+ let g=ctx.createLinearGradient(0,0,0,c.height);
+ g.addColorStop(0,"#ff9966");
+ g.addColorStop(1,"#0b1a26");
+ ctx.fillStyle=g;
+ ctx.fillRect(0,0,c.width,c.height);
 
- let offsetX = (c.width - size*19)/2;
- let offsetY = (c.height - size*17)/2;
+ let size=Math.min(c.width/19,c.height/17);
+ let ox=(c.width-size*19)/2;
+ let oy=(c.height-size*17)/2;
 
+ // maze
  for(let y=0;y<maze.length;y++){
   for(let x=0;x<maze[0].length;x++){
+    let px=ox+x*size;
+    let py=oy+y*size;
 
     if(maze[y][x]=="1"){
-      ctx.fillStyle="#000000"; // walls
+      ctx.fillStyle="#000";
+      ctx.fillRect(px,py,size,size);
     } else {
-      ctx.fillStyle="#0a3d62"; // path
+      let wave=Math.sin(t+x+y)*2;
+      ctx.fillStyle="rgba(0,150,255,0.25)";
+      ctx.fillRect(px,py+wave,size,size);
     }
-
-    ctx.fillRect(offsetX+x*size,offsetY+y*size,size,size);
   }
  }
 
- // start
- ctx.fillStyle="lime";
- ctx.fillRect(offsetX+start.x*size,offsetY+start.y*size,size,size);
+ // trail
+ trail.forEach((p,i)=>{
+   ctx.fillStyle="rgba(255,100,100,"+(i/20)+")";
+   ctx.beginPath();
+   ctx.arc(ox+p.x*size,oy+p.y*size,3,0,Math.PI*2);
+   ctx.fill();
+ });
 
- // goal
+ // start + finish
+ ctx.fillStyle="lime";
+ ctx.fillRect(ox+start.x*size,oy+start.y*size,size,size);
+
  ctx.fillStyle="gold";
- ctx.fillRect(offsetX+goal.x*size,offsetY+goal.y*size,size,size);
+ ctx.fillRect(ox+goal.x*size,oy+goal.y*size,size,size);
+
+ // enemy
+ ctx.fillStyle="purple";
+ ctx.beginPath();
+ ctx.arc(ox+enemy.x*size,oy+enemy.y*size,6,0,Math.PI*2);
+ ctx.fill();
 
  // player ❤️
  ctx.fillStyle="red";
- ctx.font = size+"px serif";
- ctx.fillText("❤",
-  offsetX+player.x*size,
-  offsetY+player.y*size
- );
+ ctx.font=size+"px serif";
+ ctx.fillText("❤",ox+player.x*size,oy+player.y*size);
+
+ // timer
+ if(startTime && !finished){
+   let time=((Date.now()-startTime)/1000).toFixed(1);
+   document.getElementById("ui").innerText="Time: "+time+"s";
+ }
 }
 
 update();
