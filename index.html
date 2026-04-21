@@ -77,43 +77,50 @@ const ctx = c.getContext("2d");
 c.width = innerWidth;
 c.height = innerHeight;
 
-let size = 35;
+// ❤️ CREATE HEART PATH
+let path = [];
 
-// MAZE
-function generateMaze(n){
- let grid = Array.from({length:n},()=>Array(n).fill(1));
- function carve(x,y){
-  grid[y][x]=0;
-  let dirs=[[2,0],[-2,0],[0,2],[0,-2]]
-    .sort(()=>Math.random()-0.3);
-  for(let [dx,dy] of dirs){
-    let nx=x+dx, ny=y+dy;
-    if(ny>0&&ny<n&&nx>0&&nx<n && grid[ny][nx]===1){
-      grid[y+dy/2][x+dx/2]=0;
-      carve(nx,ny);
-    }
-  }
+function heartPath(){
+ path = [];
+ for(let t=0; t<Math.PI*2; t+=0.02){
+   let x = 16*Math.pow(Math.sin(t),3);
+   let y = -(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t));
+   path.push({x,y});
  }
- carve(1,1);
- return grid;
 }
 
-let grid = generateMaze(size);
+// normalize path to screen
+function getScreenPath(){
+ let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+ path.forEach(p=>{
+   minX=Math.min(minX,p.x);
+   maxX=Math.max(maxX,p.x);
+   minY=Math.min(minY,p.y);
+   maxY=Math.max(maxY,p.y);
+ });
 
-let player={x:1.5,y:1.5};
-let goal={x:size-2,y:size-2};
+ let scale = Math.min(c.width/(maxX-minX+4), c.height/(maxY-minY+4));
 
-let checkpoint={x:Math.floor(size/2),y:Math.floor(size/2)};
+ return path.map(p=>({
+   x:(p.x-minX)*scale + 50,
+   y:(p.y-minY)*scale + 50
+ }));
+}
+
+heartPath();
+let screenPath = getScreenPath();
+
+let playerIndex = 0;
+
+let checkpointIndex = Math.floor(screenPath.length/2);
 let reachedCheckpoint=false;
 
 let joy={x:0,y:0};
 
-let trail=[];
-
 let startTime=null;
 let finished=false;
 
-// JOYSTICK
+// joystick
 const joyDiv=document.getElementById("joy");
 const stick=document.getElementById("stick");
 
@@ -136,7 +143,7 @@ joyDiv.ontouchend=()=>{
  stick.style.top="35px";
 };
 
-// MUSIC
+// music
 document.body.addEventListener("touchstart",()=>{
  if(!startTime){
    startTime=Date.now();
@@ -147,49 +154,29 @@ document.body.addEventListener("touchstart",()=>{
  }
 },{once:true});
 
-// COLLISION
-function isWall(x,y){
- return grid[Math.floor(y)]?.[Math.floor(x)] !== 0;
-}
-
-function move(){
- let speed=0.05;
- let steps=3;
- for(let i=0;i<steps;i++){
-   let nx = player.x + (joy.x * speed / steps);
-   if(!isWall(nx, player.y)) player.x = nx;
-   let ny = player.y + (joy.y * speed / steps);
-   if(!isWall(player.x, ny)) player.y = ny;
- }
-}
-
-// UPDATE
+// movement along path
 function update(){
+
  if(finished) return;
 
- move();
+ let speed = joy.y * -2; // forward/back
 
- trail.push({x:player.x,y:player.y});
- if(trail.length>15) trail.shift();
+ playerIndex += speed;
 
- if(!reachedCheckpoint &&
-   Math.floor(player.x)===checkpoint.x &&
-   Math.floor(player.y)===checkpoint.y){
+ playerIndex = Math.max(0, Math.min(screenPath.length-1, playerIndex));
+
+ if(!reachedCheckpoint && playerIndex >= checkpointIndex){
    reachedCheckpoint=true;
  }
 
- if(Math.floor(player.x)===goal.x &&
-    Math.floor(player.y)===goal.y){
-
+ if(playerIndex >= screenPath.length-2){
    finished=true;
 
    let t=((Date.now()-startTime)/1000).toFixed(1);
-
    document.getElementById("time").innerText="Time: "+t+"s";
 
    let calm = t < 60 ? "😌 Very Calm"
             : t < 120 ? "🙂 Calm"
-            : t < 180 ? "😅 Focused"
             : "🔥 Intense";
 
    document.getElementById("calm").innerText = calm;
@@ -198,56 +185,40 @@ function update(){
  }
 }
 
-// DRAW
+// draw
 function draw(){
+
  ctx.fillStyle="black";
  ctx.fillRect(0,0,c.width,c.height);
 
- let cell = Math.min(c.width,c.height)/size;
- let ox=(c.width-cell*size)/2;
- let oy=(c.height-cell*size)/2;
+ // path glow
+ ctx.strokeStyle="#0a3d62";
+ ctx.lineWidth=10;
+ ctx.beginPath();
+ screenPath.forEach((p,i)=>{
+   if(i===0) ctx.moveTo(p.x,p.y);
+   else ctx.lineTo(p.x,p.y);
+ });
+ ctx.stroke();
 
- for(let y=0;y<size;y++){
-  for(let x=0;x<size;x++){
-    if(grid[y][x]===0){
-      ctx.fillStyle="#0a3d62";
-      ctx.fillRect(ox+x*cell,oy+y*cell,cell,cell);
-    }
-  }
- }
-
- ctx.fillStyle="green";
- ctx.fillRect(ox+cell,oy+cell,cell,cell);
-
- ctx.fillStyle="yellow";
- ctx.fillRect(ox+goal.x*cell,oy+goal.y*cell,cell,cell);
-
+ // checkpoint
+ let cp = screenPath[checkpointIndex];
  if(!reachedCheckpoint){
    ctx.fillStyle="cyan";
-   ctx.fillRect(ox+checkpoint.x*cell,oy+checkpoint.y*cell,cell,cell);
+   ctx.beginPath();
+   ctx.arc(cp.x,cp.y,10,0,Math.PI*2);
+   ctx.fill();
  }
 
- // TRAIL
- trail.forEach((p,i)=>{
-   ctx.fillStyle="rgba(255,100,100,"+(i/15)+")";
-   ctx.beginPath();
-   ctx.arc(ox+p.x*cell+cell/2,oy+p.y*cell+cell/2,2,0,Math.PI*2);
-   ctx.fill();
- });
-
- // PLAYER GLOW
- let r = reachedCheckpoint ? cell*0.45 : cell*0.3;
+ // player
+ let p = screenPath[Math.floor(playerIndex)];
 
  ctx.shadowColor="red";
  ctx.shadowBlur=20;
 
  ctx.fillStyle="red";
  ctx.beginPath();
- ctx.arc(
-   ox+player.x*cell+cell/2,
-   oy+player.y*cell+cell/2,
-   r,0,Math.PI*2
- );
+ ctx.arc(p.x,p.y,reachedCheckpoint?14:10,0,Math.PI*2);
  ctx.fill();
 
  ctx.shadowBlur=0;
@@ -258,7 +229,6 @@ function draw(){
  }
 }
 
-// LOOP
 function loop(){
  update();
  draw();
@@ -266,10 +236,8 @@ function loop(){
 }
 
 function restart(){
- grid = generateMaze(size);
- player={x:1.5,y:1.5};
+ playerIndex=0;
  reachedCheckpoint=false;
- trail=[];
  startTime=Date.now();
  finished=false;
  document.getElementById("end").style.display="none";
