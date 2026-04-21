@@ -1,263 +1,192 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
 <title>Calm Maze</title>
 
 <style>
-body {
-  margin:0;
-  overflow:hidden;
-  background:#0a1a1f;
-  font-family:Arial;
-  color:white;
-}
-
-canvas {
-  position:absolute;
-  top:0; left:0;
-}
-
-#hud {
-  position:absolute;
-  top:10px;
-  width:100%;
-  text-align:center;
-  font-size:18px;
-}
+body { margin:0; background:#0a1a1f; overflow:hidden; }
+canvas { display:block; }
 
 #overlay {
-  position:absolute;
-  width:100%;
-  height:100%;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  flex-direction:column;
-  background:rgba(0,0,0,0.5);
+ position:absolute; width:100%; height:100%;
+ display:flex; justify-content:center; align-items:center;
+ flex-direction:column; color:white;
 }
 
 #joystick {
-  position:absolute;
-  bottom:40px;
-  left:30px;
-  width:110px;
-  height:110px;
-  border-radius:50%;
-  background:rgba(255,255,255,0.1);
+ position:absolute; bottom:40px; left:30px;
+ width:100px; height:100px;
+ border-radius:50%;
+ background:rgba(255,255,255,0.15);
 }
 
 #stick {
-  position:absolute;
-  width:44px;
-  height:44px;
-  border-radius:50%;
-  background:#00eaff;
-  left:33px;
-  top:33px;
+ position:absolute; width:40px; height:40px;
+ border-radius:50%; background:#00eaff;
+ left:30px; top:30px;
 }
 </style>
 </head>
 
 <body>
 
-<div id="hud">Time: <span id="time">0.0</span></div>
+<div id="overlay">
+<h1>🧭 Calm Maze</h1>
+<button onclick="start()">Start</button>
+</div>
 
 <canvas id="game"></canvas>
-
-<div id="overlay">
-  <h1>🧭 Calm Maze</h1>
-  <button onclick="startGame()">Start</button>
-</div>
 
 <div id="joystick"><div id="stick"></div></div>
 
 <audio id="music" loop>
-  <source src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_5c6f1b7b1b.mp3">
+<source src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_5c6f1b7b1b.mp3">
 </audio>
 
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-function resize(){
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
-resize();
-window.addEventListener("resize", resize);
+canvas.width = innerWidth;
+canvas.height = innerHeight;
 
-const size = 24, cols = 21, rows = 21;
+const size=24, cols=21, rows=21;
 
-let grid, player, goal;
+let grid=[], player, goal;
 let joyX=0, joyY=0;
-let started=false;
-let startTime=0;
+let started=false, startTime=0;
 
-// 🧠 SMART MAZE
+// ✅ SMART MAZE
 function generate(){
-  grid = Array.from({length:rows},()=>Array(cols).fill(1));
+ grid = Array.from({length:rows},()=>Array(cols).fill(1));
 
-  let goalX = cols-2;
-  let goalY = rows-2;
+ let goalX = cols-2;
+ let goalY = rows-2;
 
-  function carve(x,y,lastDir=null){
-    let dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+ function carve(x,y,lastDir=null){
+  let dirs=[[1,0],[-1,0],[0,1],[0,-1]];
 
-    dirs.sort((a,b)=>{
-      let da = Math.abs((x+a[0]*2)-goalX)+Math.abs((y+a[1]*2)-goalY);
-      let db = Math.abs((x+b[0]*2)-goalX)+Math.abs((y+b[1]*2)-goalY);
+  dirs.sort((a,b)=>{
+   let da=Math.abs((x+a[0]*2)-goalX)+Math.abs((y+a[1]*2)-goalY);
+   let db=Math.abs((x+b[0]*2)-goalX)+Math.abs((y+b[1]*2)-goalY);
 
-      if(lastDir && a[0]===lastDir[0] && a[1]===lastDir[1]) da -= 2;
-      if(lastDir && b[0]===lastDir[0] && b[1]===lastDir[1]) db -= 2;
+   if(lastDir && a[0]===lastDir[0] && a[1]===lastDir[1]) da-=2;
+   if(lastDir && b[0]===lastDir[0] && b[1]===lastDir[1]) db-=2;
 
-      return da - db + Math.random()*2;
-    });
+   return da-db+Math.random()*2;
+  });
 
-    for(let [dx,dy] of dirs){
-      let nx=x+dx*2, ny=y+dy*2;
+  for(let [dx,dy] of dirs){
+   let nx=x+dx*2, ny=y+dy*2;
 
-      if(grid[ny] && grid[ny][nx]===1){
-        grid[ny][nx]=0;
-        grid[y+dy][x+dx]=0;
-        carve(nx,ny,[dx,dy]);
-      }
-    }
+   if(grid[ny] && grid[ny][nx]===1){
+    grid[ny][nx]=0;
+    grid[y+dy][x+dx]=0;
+    carve(nx,ny,[dx,dy]);
+   }
   }
+ }
 
-  player={x:1,y:1};
-  goal={x:goalX,y:goalY};
+ player={x:1,y:1};
+ goal={x:goalX,y:goalY};
 
-  grid[player.y][player.x]=0;
-  carve(player.x,player.y);
-  grid[goal.y][goal.x]=0;
-
-  // remove some dead ends
-  for(let i=0;i<80;i++){
-    for(let y=1;y<rows-1;y++){
-      for(let x=1;x<cols-1;x++){
-        if(grid[y][x]===0){
-          let walls=0;
-          if(grid[y+1][x]===1) walls++;
-          if(grid[y-1][x]===1) walls++;
-          if(grid[y][x+1]===1) walls++;
-          if(grid[y][x-1]===1) walls++;
-
-          if(walls>=3){
-            let dirs=[[1,0],[-1,0],[0,1],[0,-1]];
-            let [dx,dy]=dirs[Math.floor(Math.random()*dirs.length)];
-            if(grid[y+dy] && grid[y+dy][x+dx]===1){
-              grid[y+dy][x+dx]=0;
-            }
-          }
-        }
-      }
-    }
-  }
+ grid[player.y][player.x]=0;
+ carve(player.x,player.y);
+ grid[goal.y][goal.x]=0;
 }
 
 // 🎮 joystick
 const stick=document.getElementById("stick");
 
 document.getElementById("joystick").addEventListener("touchmove", e=>{
-  let rect=e.target.getBoundingClientRect();
-  let x=e.touches[0].clientX-rect.left-55;
-  let y=e.touches[0].clientY-rect.top-55;
+ let rect=e.target.getBoundingClientRect();
+ let x=e.touches[0].clientX-rect.left-50;
+ let y=e.touches[0].clientY-rect.top-50;
 
-  joyX=Math.max(-1,Math.min(1,x/40));
-  joyY=Math.max(-1,Math.min(1,y/40));
+ joyX=Math.max(-1,Math.min(1,x/40));
+ joyY=Math.max(-1,Math.min(1,y/40));
 
-  stick.style.left=(55+joyX*30)+"px";
-  stick.style.top=(55+joyY*30)+"px";
+ stick.style.left=(50+joyX*30)+"px";
+ stick.style.top=(50+joyY*30)+"px";
 
-  if(!started){
-    started=true;
-    startTime=Date.now();
-  }
+ if(!started){
+  started=true;
+  startTime=Date.now();
+ }
 });
 
 document.getElementById("joystick").addEventListener("touchend", ()=>{
-  joyX=0; joyY=0;
-  stick.style.left="33px";
-  stick.style.top="33px";
+ joyX=0; joyY=0;
+ stick.style.left="30px";
+ stick.style.top="30px";
 });
 
 // movement
-let px=1, py=1;
-
 function move(){
-  px += joyX * 0.08;
-  py += joyY * 0.08;
+ let nx=player.x+(joyX>0.5?1:joyX<-0.5?-1:0);
+ let ny=player.y+(joyY>0.5?1:joyY<-0.5?-1:0);
 
-  let gx = Math.round(px);
-  let gy = Math.round(py);
-
-  if(grid[gy] && grid[gy][gx]===0){
-    player.x = gx;
-    player.y = gy;
-  }
+ if(grid[ny] && grid[ny][nx]===0){
+  player.x=nx;
+  player.y=ny;
+ }
 }
 
 // start
-function startGame(){
-  generate();
-  started=false;
-  document.getElementById("overlay").style.display="none";
+function start(){
+ generate();
+ document.getElementById("overlay").style.display="none";
 
-  let music=document.getElementById("music");
-  music.volume=0.4;
-  music.play().catch(()=>{});
+ let music=document.getElementById("music");
+ music.volume=0.4;
+ music.play().catch(()=>{});
 }
 
 // draw
 function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+ ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  let offsetX=(canvas.width-cols*size)/2;
-  let offsetY=(canvas.height-rows*size)/2;
+ let offX=(canvas.width-cols*size)/2;
+ let offY=(canvas.height-rows*size)/2;
 
-  if(started){
-    let t=(Date.now()-startTime)/1000;
-    document.getElementById("time").innerText=t.toFixed(1);
+ if(started){
+  let t=(Date.now()-startTime)/1000;
+  document.title="Time: "+t.toFixed(1);
+ }
+
+ for(let y=0;y<rows;y++){
+  for(let x=0;x<cols;x++){
+   ctx.fillStyle = grid[y][x] ? "#1f3a40" : "#0f2a30";
+   ctx.fillRect(offX+x*size, offY+y*size, size, size);
   }
+ }
 
-  for(let y=0;y<rows;y++){
-    for(let x=0;x<cols;x++){
-      if(grid && grid[y][x]===1){
-        ctx.fillStyle="#1f3a40";
-        ctx.fillRect(offsetX+x*size,offsetY+y*size,size,size);
-      } else {
-        ctx.fillStyle="#0f2a30";
-        ctx.fillRect(offsetX+x*size,offsetY+y*size,size,size);
-      }
-    }
+ if(player){
+  move();
+
+  // start tile
+  ctx.fillStyle="lime";
+  ctx.fillRect(offX+size,offY+size,size,size);
+
+  // finish
+  ctx.fillStyle="gold";
+  ctx.fillRect(offX+goal.x*size,offY+goal.y*size,size,size);
+
+  // player
+  ctx.fillStyle="#00eaff";
+  ctx.beginPath();
+  ctx.arc(offX+player.x*size+12,offY+player.y*size+12,8,0,Math.PI*2);
+  ctx.fill();
+
+  if(player.x===goal.x && player.y===goal.y){
+   let t=((Date.now()-startTime)/1000).toFixed(1);
+   alert("Finished in "+t+"s 🌊");
+   location.reload();
   }
+ }
 
-  if(player){
-    move();
-
-    // start
-    ctx.fillStyle="lime";
-    ctx.fillRect(offsetX+size, offsetY+size, size, size);
-
-    // finish
-    ctx.fillStyle="gold";
-    ctx.fillRect(offsetX+goal.x*size, offsetY+goal.y*size, size, size);
-
-    // player
-    ctx.fillStyle="#00eaff";
-    ctx.beginPath();
-    ctx.arc(offsetX+player.x*size+size/2, offsetY+player.y*size+size/2, 8, 0, Math.PI*2);
-    ctx.fill();
-
-    if(player.x===goal.x && player.y===goal.y){
-      let t=(Date.now()-startTime)/1000;
-      alert("Finished in "+t.toFixed(1)+"s 🌊");
-      location.reload();
-    }
-  }
-
-  requestAnimationFrame(draw);
+ requestAnimationFrame(draw);
 }
 
 draw();
