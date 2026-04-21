@@ -2,170 +2,232 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>AFib Flow Control</title>
+<title>Heart Maze Premium</title>
 
 <style>
 body {
   margin: 0;
-  background: radial-gradient(circle, #0f172a, #020617);
+  background: radial-gradient(circle, #050505, #000);
   color: white;
-  font-family: Arial, sans-serif;
   text-align: center;
-}
-
-h2 {
-  margin-top: 20px;
-}
-
-#ui {
-  position: absolute;
-  top: 10px;
-  width: 100%;
-}
-
-#stability {
-  font-size: 18px;
-}
-
-#timer {
-  margin-top: 5px;
+  font-family: Arial;
+  overflow: hidden;
 }
 
 canvas {
   display: block;
+  margin: auto;
 }
 
-button {
-  margin-top: 10px;
-  padding: 10px 20px;
-  border: none;
-  background: #22c55e;
-  color: black;
-  border-radius: 8px;
-  cursor: pointer;
+#info {
+  position: absolute;
+  top: 10px;
+  width: 100%;
+  font-size: 18px;
 }
 </style>
 </head>
 
 <body>
 
-<div id="ui">
-  <h2>AFib Flow Control</h2>
-  <div id="stability">Stability: 50%</div>
-  <div id="timer">Time: 60s</div>
-  <button onclick="start()">Start</button>
-</div>
-
-<canvas id="canvas"></canvas>
+<div id="info">Level 1</div>
+<canvas id="maze"></canvas>
 
 <script>
-const canvas = document.getElementById("canvas");
+const canvas = document.getElementById("maze");
 const ctx = canvas.getContext("2d");
+const info = document.getElementById("info");
 
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-let particles = [];
-let mouse = { x: canvas.width / 2, y: canvas.height / 2 };
-let stability = 50;
-let running = false;
-let timeLeft = 60;
-let timerInterval;
+let level = 1;
+let player = { x: canvas.width/2, y: canvas.height - 80 };
+let trail = [];
+let flash = 0;
 
-document.addEventListener("mousemove", e => {
-  mouse.x = e.clientX;
-  mouse.y = e.clientY;
-});
+let offset = 0;
 
-document.addEventListener("touchmove", e => {
-  mouse.x = e.touches[0].clientX;
-  mouse.y = e.touches[0].clientY;
-});
+function settings() {
+  return {
+    path: 120 - level * 8,
+    speed: 1 + level * 0.5,
+    obstacles: 3 + level
+  };
+}
 
-function createParticles() {
-  particles = [];
-  for (let i = 0; i < 120; i++) {
-    particles.push({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      vx: 0,
-      vy: 0
+let obstacles = [];
+
+function createObstacles() {
+  obstacles = [];
+  let s = settings();
+
+  for (let i = 0; i < s.obstacles; i++) {
+    obstacles.push({
+      type: i % 3,
+      x: canvas.width/2,
+      y: canvas.height/2,
+      r: 8,
+      angle: Math.random()*Math.PI*2,
+      speed: s.speed
     });
   }
 }
 
-function updateParticles() {
-  let movement = Math.abs(mouse.x - canvas.width/2) + Math.abs(mouse.y - canvas.height/2);
+function inside(x,y){
+  let s = settings();
 
-  if (movement < 200) {
-    stability += 0.2;
-  } else {
-    stability -= 0.4;
-  }
+  let dx = (x - canvas.width/2 + Math.sin(offset)*15) / s.path;
+  let dy = (y - canvas.height/2 + Math.cos(offset)*15) / s.path;
 
-  stability = Math.max(0, Math.min(100, stability));
-
-  document.getElementById("stability").innerText = "Stability: " + Math.floor(stability) + "%";
-
-  particles.forEach(p => {
-    let dx = mouse.x - p.x;
-    let dy = mouse.y - p.y;
-
-    p.vx += dx * 0.0005 * (stability / 100);
-    p.vy += dy * 0.0005 * (stability / 100);
-
-    p.vx *= 0.95;
-    p.vy *= 0.95;
-
-    p.x += p.vx;
-    p.y += p.vy;
-
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(100,200,255,${stability/100})`;
-    ctx.fill();
-  });
+  return (dx*dx + dy*dy - 1)**3 - dx*dx*dy*dy*dy < -0.03;
 }
 
-function loop() {
-  if (!running) return;
+function drawHeart(){
+  ctx.beginPath();
+  for(let t=0; t<Math.PI*2; t+=0.01){
+    let x = 16*Math.pow(Math.sin(t),3);
+    let y = -(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t));
 
-  ctx.fillStyle = "rgba(2,6,23,0.2)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.lineTo(
+      canvas.width/2 + x*10 + Math.sin(offset)*15,
+      canvas.height/2 + y*10 + Math.cos(offset)*15
+    );
+  }
+  ctx.closePath();
+  ctx.strokeStyle = "rgba(255,0,100,0.6)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
 
-  updateParticles();
+function draw(){
+  ctx.fillStyle = "rgba(0,0,0,0.25)";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
 
+  drawHeart();
+
+  // glow trail
+  trail.push({x: player.x, y: player.y});
+  if(trail.length > 20) trail.shift();
+
+  ctx.beginPath();
+  trail.forEach((p,i)=>{
+    ctx.lineTo(p.x,p.y);
+  });
+  ctx.strokeStyle = "rgba(0,255,200,0.3)";
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  // obstacles
+  obstacles.forEach(o=>{
+    if(o.type===0){
+      o.x += o.speed;
+      if(o.x < 100 || o.x > canvas.width-100) o.speed *= -1;
+    }
+    if(o.type===1){
+      o.y += o.speed;
+      if(o.y < 100 || o.y > canvas.height-100) o.speed *= -1;
+    }
+    if(o.type===2){
+      o.angle += 0.05;
+      o.x = canvas.width/2 + Math.cos(o.angle)*150;
+      o.y = canvas.height/2 + Math.sin(o.angle)*150;
+    }
+
+    ctx.beginPath();
+    ctx.arc(o.x,o.y,o.r,0,Math.PI*2);
+    ctx.fillStyle = "red";
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = "red";
+    ctx.fill();
+  });
+
+  // player glow
+  ctx.beginPath();
+  ctx.arc(player.x,player.y,6,0,Math.PI*2);
+  ctx.fillStyle = "#00ffcc";
+  ctx.shadowBlur = 20;
+  ctx.shadowColor = "#00ffcc";
+  ctx.fill();
+
+  // fail flash
+  if(flash>0){
+    ctx.fillStyle = "rgba(255,0,0,0.3)";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    flash--;
+  }
+
+  info.innerText = "Level " + level;
+}
+
+function update(){
+  offset += 0.015 + level*0.003;
+}
+
+canvas.addEventListener("mousemove", move);
+canvas.addEventListener("touchmove", e=>move(e.touches[0]));
+
+function move(e){
+  let rect = canvas.getBoundingClientRect();
+  player.x = e.clientX - rect.left;
+  player.y = e.clientY - rect.top;
+
+  if(!inside(player.x,player.y)) fail();
+
+  obstacles.forEach(o=>{
+    let dx = player.x-o.x;
+    let dy = player.y-o.y;
+    if(Math.sqrt(dx*dx+dy*dy)<o.r+6) fail();
+  });
+
+  if(player.y < 60){
+    level++;
+    if(level>6){
+      alert("You mastered it 💙");
+      level=1;
+    }
+    nextLevel();
+  }
+}
+
+function fail(){
+  flash = 10;
+  player.x = canvas.width/2;
+  player.y = canvas.height - 80;
+  trail = [];
+}
+
+function nextLevel(){
+  createObstacles();
+  player.x = canvas.width/2;
+  player.y = canvas.height - 80;
+}
+
+function loop(){
+  update();
+  draw();
   requestAnimationFrame(loop);
 }
 
-function start() {
-  if (running) return;
+createObstacles();
+loop();
 
-  running = true;
-  stability = 50;
-  timeLeft = 60;
+// ambient audio
+let audio = new Audio("https://cdn.pixabay.com/audio/2022/03/15/audio_115b9b3b3b.mp3");
+audio.loop = true;
+audio.volume = 0.25;
+audio.play().catch(()=>{});
 
-  createParticles();
+// subtle fail sound
+let failSound = new Audio("https://cdn.pixabay.com/audio/2022/03/10/audio_1b9c.mp3");
 
-  timerInterval = setInterval(() => {
-    timeLeft--;
-    document.getElementById("timer").innerText = "Time: " + timeLeft + "s";
-
-    if (timeLeft <= 0) {
-      stop();
-    }
-  }, 1000);
-
-  loop();
-}
-
-function stop() {
-  running = false;
-  clearInterval(timerInterval);
-
-  document.getElementById("timer").innerText = "Done";
-  document.getElementById("stability").innerText =
-    "Final Stability: " + Math.floor(stability) + "%";
+function fail(){
+  flash = 10;
+  failSound.currentTime = 0;
+  failSound.play();
+  player.x = canvas.width/2;
+  player.y = canvas.height - 80;
+  trail = [];
 }
 </script>
 
