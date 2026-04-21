@@ -1,216 +1,235 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>Flow Maze</title>
+
 <style>
-body { margin:0; background:#0b1a26; overflow:hidden; }
-canvas { display:block; margin:auto; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: black;
+    font-family: sans-serif;
+    touch-action: none;
+  }
 
-#ui{
- position:fixed;
- top:10px;
- width:100%;
- text-align:center;
- color:white;
- font-family:sans-serif;
- font-size:18px;
-}
+  canvas {
+    display: block;
+  }
 
-#menu{
- position:fixed;
- top:50%;
- left:50%;
- transform:translate(-50%,-50%);
- display:none;
- text-align:center;
- color:white;
-}
+  #ui {
+    position: fixed;
+    top: 10px;
+    width: 100%;
+    text-align: center;
+    color: white;
+    font-size: 16px;
+  }
 
-button{
- padding:12px 24px;
- margin:10px;
- font-size:18px;
- border:none;
- border-radius:8px;
-}
+  #endScreen {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    background: rgba(0,0,0,0.8);
+    color: white;
+  }
 
-#joy {
- position:fixed;
- bottom:30px;
- left:50%;
- transform:translateX(-50%);
- width:110px;height:110px;
- border-radius:50%;
- background:rgba(255,255,255,0.08);
-}
-#stick {
- width:50px;height:50px;
- background:#ffd166;
- border-radius:50%;
- position:absolute;
- top:30px;left:30px;
-}
+  button {
+    padding: 12px 20px;
+    margin-top: 10px;
+    font-size: 16px;
+  }
 </style>
 </head>
+
 <body>
 
-<div id="ui">Tap to start</div>
+<div id="ui">Time: 0.0s</div>
 
-<div id="menu">
-  <h2 id="result"></h2>
+<canvas id="game"></canvas>
+
+<div id="endScreen">
+  <h2 id="finalTime"></h2>
   <button onclick="restart()">Play Again</button>
 </div>
 
-<canvas id="c"></canvas>
-<div id="joy"><div id="stick"></div></div>
-
-<audio id="music" loop>
-<source src="https://cdn.pixabay.com/audio/2022/03/15/audio_9b1b62b9bb.mp3" type="audio/mp3">
-</audio>
-
 <script>
-const c = document.getElementById("c");
-const ctx = c.getContext("2d");
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
-function resize(){ c.width=innerWidth; c.height=innerHeight; }
-resize(); onresize=resize;
+let w = canvas.width = innerWidth;
+let h = canvas.height = innerHeight;
 
-// GUARANTEED SOLVABLE MAZE
-const maze = [
-"111111111111111",
-"100000000000001",
-"101111111111101",
-"100000000000101",
-"111111111110101",
-"100000000010001",
-"101111111010111",
-"100000001010001",
-"111111101011101",
-"100000001000001",
-"101111111111101",
-"100000000000001",
-"111111111111101",
-"100000000000001",
-"111111111111111"
-];
+const cellSize = Math.floor(Math.min(w, h) / 55);
+const offsetX = (w - cellSize * 51) / 2;
+const offsetY = (h - cellSize * 51) / 2;
 
-let start={x:1.5,y:1.5};
-let goal={x:13.5,y:13.5};
+// 🔥 HARD MAZE 51x51
+function generateMaze(cols, rows) {
+  const grid = Array.from({ length: rows }, () => Array(cols).fill(1));
+  const start = { x: 1, y: 1 };
+  const end = { x: cols - 2, y: rows - 2 };
 
-let player, joy, startTime, finished;
+  function carve(x, y, lastDir = null) {
+    const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
 
-function init(){
- player={...start};
- joy={x:0,y:0};
- startTime=null;
- finished=false;
- document.getElementById("menu").style.display="none";
+    dirs.sort((a,b)=>{
+      let da = Math.abs(x+a[0]*2-end.x)+Math.abs(y+a[1]*2-end.y);
+      let db = Math.abs(x+b[0]*2-end.x)+Math.abs(y+b[1]*2-end.y);
+
+      if(lastDir && a[0]===lastDir[0] && a[1]===lastDir[1]) da+=3;
+      if(lastDir && b[0]===lastDir[0] && b[1]===lastDir[1]) db+=3;
+
+      return da-db + Math.random()*4;
+    });
+
+    for(let [dx,dy] of dirs){
+      let nx = x+dx*2;
+      let ny = y+dy*2;
+      if(grid[ny] && grid[ny][nx]===1){
+        grid[ny][nx]=0;
+        grid[y+dy][x+dx]=0;
+        carve(nx,ny,[dx,dy]);
+      }
+    }
+  }
+
+  grid[start.y][start.x]=0;
+  carve(start.x,start.y);
+
+  // force path
+  let x=start.x,y=start.y;
+  while(x!==end.x || y!==end.y){
+    if(Math.random()<0.5){
+      if(x<end.x)x++; else if(x>end.x)x--;
+    } else {
+      if(y<end.y)y++; else if(y>end.y)y--;
+    }
+    grid[y][x]=0;
+  }
+
+  // reduce shortcuts
+  for(let i=0;i<300;i++){
+    let rx=Math.floor(Math.random()*cols);
+    let ry=Math.floor(Math.random()*rows);
+
+    let open=0;
+    if(grid[ry]?.[rx+1]===0)open++;
+    if(grid[ry]?.[rx-1]===0)open++;
+    if(grid[ry+1]?.[rx]===0)open++;
+    if(grid[ry-1]?.[rx]===0)open++;
+
+    if(grid[ry][rx]===1 && open===1 && Math.random()<0.3){
+      grid[ry][rx]=0;
+    }
+  }
+
+  return {grid,start,end};
 }
 
-init();
+let {grid,start,end} = generateMaze(51,51);
 
-// joystick
-const stick=document.getElementById("stick");
-const joyDiv=document.getElementById("joy");
-
-joyDiv.ontouchmove=e=>{
- let r=joyDiv.getBoundingClientRect();
- let t=e.touches[0];
- let dx=t.clientX-(r.left+55);
- let dy=t.clientY-(r.top+55);
- let d=Math.hypot(dx,dy);
- if(d>40){dx*=40/d;dy*=40/d;}
- stick.style.left=(dx+30)+"px";
- stick.style.top=(dy+30)+"px";
- joy.x=dx/40; joy.y=dy/40;
-};
-joyDiv.ontouchend=()=>{
- joy.x=joy.y=0;
- stick.style.left="30px";
- stick.style.top="30px";
+let player = {
+  x: start.x,
+  y: start.y
 };
 
-// START + MUSIC
-document.body.onclick=()=>{
- if(!startTime){
-   startTime=Date.now();
-   document.getElementById("ui").innerText="";
-   document.getElementById("music").play().catch(()=>{});
- }
-};
+let joy = {x: w/2, y: h-80, dx:0, dy:0};
 
-function canMove(x,y){
- return maze[Math.floor(y)][Math.floor(x)]==="0";
-}
+let startTime = performance.now();
+let finished = false;
+
+canvas.addEventListener("touchmove", e=>{
+  let t = e.touches[0];
+  joy.dx = (t.clientX - joy.x)/40;
+  joy.dy = (t.clientY - joy.y)/40;
+});
 
 function update(){
+  if(finished) return;
 
- if(!finished){
+  let nx = player.x + joy.dx * 0.2;
+  let ny = player.y + joy.dy * 0.2;
 
-   let speed=0.07;
+  if(grid[Math.floor(ny)]?.[Math.floor(nx)]===0){
+    player.x = nx;
+    player.y = ny;
+  }
 
-   let nx=player.x+joy.x*speed;
-   if(canMove(nx,player.y)) player.x=nx;
-
-   let ny=player.y+joy.y*speed;
-   if(canMove(player.x,ny)) player.y=ny;
-
-   // WIN
-   if(Math.hypot(player.x-goal.x, player.y-goal.y)<0.5){
-     finished=true;
-
-     let time=((Date.now()-startTime)/1000).toFixed(1);
-
-     document.getElementById("result").innerText =
-       "Finished in "+time+"s";
-
-     document.getElementById("menu").style.display="block";
-   }
- }
-
- draw();
- requestAnimationFrame(update);
-}
-
-function restart(){
- init();
+  if(Math.floor(player.x)===end.x && Math.floor(player.y)===end.y){
+    finished = true;
+    let time = ((performance.now()-startTime)/1000).toFixed(1);
+    document.getElementById("finalTime").innerText = "Finished in "+time+"s";
+    document.getElementById("endScreen").style.display="flex";
+  }
 }
 
 function draw(){
- ctx.clearRect(0,0,c.width,c.height);
+  ctx.fillStyle = "black";
+  ctx.fillRect(0,0,w,h);
 
- let size=Math.min(c.width/15,c.height/15);
- let ox=(c.width-size*15)/2;
- let oy=(c.height-size*15)/2;
-
- for(let y=0;y<maze.length;y++){
-  for(let x=0;x<maze[0].length;x++){
-    ctx.fillStyle = maze[y][x]=="1" ? "#000" : "#0a3d62";
-    ctx.fillRect(ox+x*size,oy+y*size,size,size);
+  for(let y=0;y<51;y++){
+    for(let x=0;x<51;x++){
+      if(grid[y][x]===0){
+        ctx.fillStyle="#0a3a5a";
+        ctx.fillRect(offsetX+x*cellSize,offsetY+y*cellSize,cellSize,cellSize);
+      }
+    }
   }
- }
 
- // start
- ctx.fillStyle="lime";
- ctx.fillRect(ox+start.x*size,oy+start.y*size,size,size);
+  // start
+  ctx.fillStyle="green";
+  ctx.fillRect(offsetX+start.x*cellSize,offsetY+start.y*cellSize,cellSize,cellSize);
 
- // finish
- ctx.fillStyle="gold";
- ctx.fillRect(ox+goal.x*size,oy+goal.y*size,size,size);
+  // end
+  ctx.fillStyle="yellow";
+  ctx.fillRect(offsetX+end.x*cellSize,offsetY+end.y*cellSize,cellSize,cellSize);
 
- // player
- ctx.fillStyle="red";
- ctx.font=size+"px serif";
- ctx.fillText("❤",ox+player.x*size,oy+player.y*size);
+  // player ❤️
+  ctx.fillStyle="red";
+  ctx.beginPath();
+  ctx.arc(
+    offsetX+player.x*cellSize+cellSize/2,
+    offsetY+player.y*cellSize+cellSize/2,
+    cellSize/3,0,Math.PI*2
+  );
+  ctx.fill();
 
- // timer
- if(startTime && !finished){
-   let t=((Date.now()-startTime)/1000).toFixed(1);
-   document.getElementById("ui").innerText="Time: "+t+"s";
- }
+  // joystick
+  ctx.fillStyle="rgba(255,200,0,0.6)";
+  ctx.beginPath();
+  ctx.arc(joy.x,joy.y,30,0,Math.PI*2);
+  ctx.fill();
+
+  let time = ((performance.now()-startTime)/1000).toFixed(1);
+  document.getElementById("ui").innerText = "Time: "+time+"s";
 }
 
-update();
+function loop(){
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function restart(){
+  let m = generateMaze(51,51);
+  grid = m.grid;
+  start = m.start;
+  end = m.end;
+  player.x = start.x;
+  player.y = start.y;
+  startTime = performance.now();
+  finished = false;
+  document.getElementById("endScreen").style.display="none";
+}
+
+loop();
 </script>
+
 </body>
 </html>
