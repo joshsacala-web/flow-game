@@ -5,6 +5,7 @@
 <style>
 body { margin:0; background:black; overflow:hidden; }
 canvas { display:block; }
+
 #ui{
  position:fixed;
  top:10px;
@@ -13,12 +14,38 @@ canvas { display:block; }
  color:white;
  font-family:sans-serif;
 }
+
+#joy{
+ position:fixed;
+ bottom:40px;
+ left:50%;
+ transform:translateX(-50%);
+ width:120px;
+ height:120px;
+ border-radius:50%;
+ background:rgba(255,255,255,0.08);
+}
+#stick{
+ position:absolute;
+ width:50px;
+ height:50px;
+ border-radius:50%;
+ background:#ffd166;
+ left:35px;
+ top:35px;
+}
 </style>
 </head>
 <body>
 
 <div id="ui">Tap to Start</div>
 <canvas id="c"></canvas>
+
+<div id="joy"><div id="stick"></div></div>
+
+<audio id="music" loop>
+<source src="https://cdn.pixabay.com/audio/2022/03/15/audio_115b9b4b6f.mp3">
+</audio>
 
 <script>
 const c = document.getElementById("c");
@@ -48,8 +75,13 @@ let map = [
 [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
 ];
 
-let player = {x:1,y:1,dx:0,dy:0};
-let nextDir = {x:0,y:0};
+let player = {x:1,y:1};
+let dir = {x:0,y:0};
+
+let ghosts = [
+ {x:13,y:1,dx:0,dy:0},
+ {x:13,y:13,dx:0,dy:0}
+];
 
 let pellets = [];
 for(let y=0;y<size;y++){
@@ -61,48 +93,60 @@ for(let y=0;y<size;y++){
 let score = 0;
 let started=false;
 
-// controls (tap direction)
-document.addEventListener("touchstart",e=>{
+// joystick
+const joyDiv=document.getElementById("joy");
+const stick=document.getElementById("stick");
+
+let joy={x:0,y:0};
+
+joyDiv.ontouchmove=e=>{
+ let r=joyDiv.getBoundingClientRect();
  let t=e.touches[0];
- let x=t.clientX;
- let y=t.clientY;
+ let dx=t.clientX-(r.left+60);
+ let dy=t.clientY-(r.top+60);
+ let d=Math.hypot(dx,dy);
+ if(d>40){ dx*=40/d; dy*=40/d; }
+ stick.style.left=(dx+35)+"px";
+ stick.style.top=(dy+35)+"px";
+ joy.x=dx/40;
+ joy.y=dy/40;
+};
 
- let cx=c.width/2;
- let cy=c.height/2;
+joyDiv.ontouchend=()=>{
+ joy.x=0; joy.y=0;
+ stick.style.left="35px";
+ stick.style.top="35px";
+};
 
- if(Math.abs(x-cx)>Math.abs(y-cy)){
-   nextDir = {x:(x>cx?1:-1),y:0};
- }else{
-   nextDir = {x:0,y:(y>cy?1:-1)};
- }
-
+// start
+document.body.addEventListener("touchstart",()=>{
  if(!started){
    started=true;
    document.getElementById("ui").innerText="";
+   document.getElementById("music").play().catch(()=>{});
  }
-});
+},{once:true});
 
 // movement
 function update(){
+
  if(!started) return;
 
- let nx = player.x + nextDir.x;
- let ny = player.y + nextDir.y;
-
- if(map[ny][nx]===0){
-   player.dx = nextDir.x;
-   player.dy = nextDir.y;
+ if(Math.abs(joy.x) > Math.abs(joy.y)){
+   dir = {x: joy.x>0?1:-1, y:0};
+ }else if(Math.abs(joy.y)>0.2){
+   dir = {x:0, y: joy.y>0?1:-1};
  }
 
- nx = player.x + player.dx;
- ny = player.y + player.dy;
+ let nx = player.x + dir.x;
+ let ny = player.y + dir.y;
 
  if(map[ny][nx]===0){
    player.x = nx;
    player.y = ny;
  }
 
- // eat pellets
+ // pellets
  pellets = pellets.filter(p=>{
    if(p.x===player.x && p.y===player.y){
      score++;
@@ -110,11 +154,37 @@ function update(){
    }
    return true;
  });
+
+ // 👻 ghost movement (simple + stable)
+ ghosts.forEach(g=>{
+   let options = [
+     {x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}
+   ].filter(d=> map[g.y+d.y][g.x+d.x]===0);
+
+   // slight chase bias
+   options.sort((a,b)=>{
+     let da = Math.abs((g.x+a.x)-player.x)+Math.abs((g.y+a.y)-player.y);
+     let db = Math.abs((g.x+b.x)-player.x)+Math.abs((g.y+b.y)-player.y);
+     return da-db;
+   });
+
+   let move = options[Math.floor(Math.random()*2)];
+   if(move){
+     g.x += move.x;
+     g.y += move.y;
+   }
+
+   // collision with player
+   if(g.x===player.x && g.y===player.y){
+     player = {x:1,y:1};
+     score = Math.max(0, score-5);
+   }
+ });
 }
 
 // draw heart
-function drawHeart(x,y,size){
- ctx.fillStyle="red";
+function drawHeart(x,y,size,color){
+ ctx.fillStyle=color;
  ctx.beginPath();
  ctx.moveTo(x,y);
  ctx.bezierCurveTo(x,y-size/2,x-size,y-size/2,x-size,y);
@@ -138,13 +208,15 @@ function draw(){
   }
  }
 
- // pellets
  pellets.forEach(p=>{
-   drawHeart(p.x*cell+cell/2,p.y*cell+cell/2,3);
+   drawHeart(p.x*cell+cell/2,p.y*cell+cell/2,3,"pink");
  });
 
- // player
- drawHeart(player.x*cell+cell/2,player.y*cell+cell/2,cell/4);
+ ghosts.forEach(g=>{
+   drawHeart(g.x*cell+cell/2,g.y*cell+cell/2,cell/4,"purple");
+ });
+
+ drawHeart(player.x*cell+cell/2,player.y*cell+cell/2,cell/4,"red");
 
  document.getElementById("ui").innerText="Score: "+score;
 }
