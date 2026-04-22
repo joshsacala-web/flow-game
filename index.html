@@ -33,33 +33,18 @@ canvas { display:block; }
  text-align:center;
  color:white;
  font-family:sans-serif;
- font-size:18px;
-}
-
-#end{
- position:fixed;
- top:50%;
- left:50%;
- transform:translate(-50%,-50%);
- color:white;
- font-family:sans-serif;
- text-align:center;
- display:none;
-}
-button{
- padding:10px 20px;
- font-size:18px;
- margin-top:10px;
 }
 </style>
 </head>
 <body>
 
-<div id="ui">Time: 0.0s</div>
-<div id="end"></div>
-
+<div id="ui">Tap to Start</div>
 <canvas id="c"></canvas>
 <div id="joy"><div id="stick"></div></div>
+
+<audio id="music" loop>
+<source src="https://cdn.pixabay.com/audio/2022/11/03/audio_7b9c7b5a6e.mp3">
+</audio>
 
 <script>
 const c = document.getElementById("c");
@@ -68,22 +53,18 @@ const ctx = c.getContext("2d");
 c.width = innerWidth;
 c.height = innerHeight;
 
-let startTime = Date.now();
-let finished = false;
-
-let player = {x:120,y:120,size:10};
-let spawn = {x:120,y:120};
+let player = {x:c.width/2,y:c.height/2};
 let joy={x:0,y:0};
 
-// finish
-let finish = {x:420,y:520};
+let started=false;
+let combo=0;
+let score=0;
 
-// checkpoints
-let checkpoints = [
- {x:200,y:140,hit:false},
- {x:360,y:260,hit:false},
- {x:260,y:420,hit:false}
-];
+// 🎵 beat system
+let bpm = 70;
+let beatInterval = 60000 / bpm;
+let lastBeat = Date.now();
+let beatPulse = 0;
 
 // joystick
 const joyDiv=document.getElementById("joy");
@@ -108,90 +89,47 @@ joyDiv.ontouchend=()=>{
  stick.style.top="35px";
 };
 
-// maze
-let walls = [
- {x:40,y:40,w:440,h:20},
- {x:40,y:40,w:20,h:520},
- {x:40,y:540,w:440,h:20},
- {x:460,y:40,w:20,h:520},
-
- {x:120,y:120,w:300,h:20},
- {x:120,y:120,w:20,h:200},
- {x:120,y:300,w:250,h:20},
- {x:350,y:200,w:20,h:220},
- {x:200,y:200,w:180,h:20},
- {x:200,y:200,w:20,h:180},
- {x:200,y:360,w:200,h:20},
-];
-
-// collision
-function collides(nx,ny){
- let r=player.size;
- for(let w of walls){
-   if(nx+r>w.x && nx-r<w.x+w.w &&
-      ny+r>w.y && ny-r<w.y+w.h){
-     return true;
-   }
+// start
+document.body.addEventListener("touchstart",()=>{
+ if(!started){
+   started=true;
+   document.getElementById("ui").innerText="";
+   document.getElementById("music").play().catch(()=>{});
  }
- return false;
-}
+},{once:true});
 
 // update
 function update(){
- if(finished) return;
 
- let speed=2.8;
+ if(!started) return;
 
- let nx = player.x + joy.x*speed;
- let ny = player.y + joy.y*speed;
+ let now = Date.now();
 
- if(!collides(nx,player.y)) player.x=nx;
- if(!collides(player.x,ny)) player.y=ny;
+ // beat pulse
+ if(now - lastBeat > beatInterval){
+   lastBeat = now;
+   beatPulse = 1;
 
- // checkpoints
- checkpoints.forEach(cp=>{
-   if(!cp.hit){
-     if(Math.hypot(player.x-cp.x,player.y-cp.y)<15){
-       cp.hit=true;
-       player.size+=2;
-       spawn.x=cp.x;
-       spawn.y=cp.y;
-     }
+   // 🔥 scoring check
+   let movement = Math.hypot(joy.x,joy.y);
+   if(movement > 0.3){
+     combo++;
+     score += combo;
+   } else {
+     combo = 0;
    }
- });
-
- // finish check
- if(Math.hypot(player.x-finish.x,player.y-finish.y)<15){
-   finished=true;
-   showEnd();
  }
-}
 
-// rating
-function getRating(time){
- if(time < 30) return "😌 Zen Master";
- if(time < 60) return "🙂 Calm Flow";
- if(time < 90) return "😅 Getting There";
- return "😤 Chaos Mode";
-}
+ beatPulse *= 0.9;
 
-function showEnd(){
- let t = ((Date.now()-startTime)/1000).toFixed(1);
- let rating = getRating(t);
-
- let end = document.getElementById("end");
- end.style.display="block";
- end.innerHTML = `
-   <h2>Finished!</h2>
-   <p>Time: ${t}s</p>
-   <p>${rating}</p>
-   <button onclick="location.reload()">Play Again</button>
- `;
+ // movement
+ let speed = 2.5;
+ player.x += joy.x * speed;
+ player.y += joy.y * speed;
 }
 
 // heart
 function heart(x,y,s){
- ctx.fillStyle="red";
  ctx.beginPath();
  ctx.moveTo(x,y);
  ctx.bezierCurveTo(x,y-s/2,x-s,y-s/2,x-s,y);
@@ -206,38 +144,22 @@ function draw(){
  ctx.fillStyle="#020617";
  ctx.fillRect(0,0,c.width,c.height);
 
- // maze
- ctx.shadowColor="#00aaff";
- ctx.shadowBlur=10;
- ctx.fillStyle="#0a3d62";
- walls.forEach(w=>ctx.fillRect(w.x,w.y,w.w,w.h));
- ctx.shadowBlur=0;
+ // pulse background
+ ctx.fillStyle=`rgba(255,0,0,${beatPulse*0.2})`;
+ ctx.fillRect(0,0,c.width,c.height);
 
- // checkpoints
- checkpoints.forEach(cp=>{
-   ctx.beginPath();
-   ctx.arc(cp.x,cp.y,6,0,Math.PI*2);
-   ctx.fillStyle = cp.hit ? "#00ffcc" : "#ffd166";
-   ctx.fill();
- });
+ // heart scale with beat
+ let size = 20 + beatPulse*10;
 
- // finish
- ctx.beginPath();
- ctx.arc(finish.x,finish.y,8,0,Math.PI*2);
- ctx.fillStyle="#00ff00";
- ctx.fill();
-
- // player
  ctx.shadowColor="red";
- ctx.shadowBlur=20;
- heart(player.x,player.y,player.size);
+ ctx.shadowBlur=30;
+ ctx.fillStyle="red";
+ heart(player.x,player.y,size);
  ctx.shadowBlur=0;
 
- // timer
- if(!finished){
-   let t=((Date.now()-startTime)/1000).toFixed(1);
-   document.getElementById("ui").innerText="Time: "+t+"s";
- }
+ // UI
+ document.getElementById("ui").innerText =
+  "Score: "+score+" | Combo: "+combo;
 }
 
 function loop(){
