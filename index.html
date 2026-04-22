@@ -88,25 +88,22 @@ function move(e){
  player.style.top = y + "px";
 }
 
-// spawn (FINAL COLOR SYSTEM)
+// spawn (FINAL CLEAN COLORS)
 function spawn(){
  let h = document.createElement("div");
  h.className = "heart";
 
  let r = Math.random();
 
- if(r > 0.97){
+ if(r > 0.95){
    h.type="power";
    h.innerHTML = "<span style='color:#ffd966; filter: drop-shadow(0 0 6px #ffd966);'>💛</span>";
- } else if(r > 0.7){
-   h.type="green";
-   h.innerHTML = "<span style='color:#6ee7b7;'>❤️</span>";
- } else if(r > 0.3){
+ } else if(r > 0.35){
    h.type="good";
    h.innerHTML = "<span style='color:#ff6b6b;'>❤️</span>";
  } else {
    h.type="bad";
-   h.innerHTML = "<span style='color:#a855f7; filter: drop-shadow(0 0 6px #a855f7);'>💜</span>";
+   h.innerHTML = "<span style='color:#22d3ee; filter: drop-shadow(0 0 6px #22d3ee);'>💙</span>";
  }
 
  h.x = Math.random()*innerWidth;
@@ -141,11 +138,6 @@ setInterval(()=>{
      if(h.type==="good"){
        time += 1;
        beep(500,0.08);
-     }
-
-     if(h.type==="green"){
-       time += 2;
-       beep(650,0.08);
      }
 
      if(h.type==="power"){
