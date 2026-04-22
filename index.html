@@ -86,21 +86,24 @@ function move(e){
  player.style.top = y + "px";
 }
 
-// spawn
+// spawn (balanced probabilities)
 function spawn(){
  let h = document.createElement("div");
  h.className = "heart";
 
  let r = Math.random();
 
- if(r > 0.8){
-   h.type="power";
+ if(r > 0.9){
+   h.type="power";       // 💛 rare
    h.innerText="💛";
- } else if(r > 0.3){
-   h.type="good";
+ } else if(r > 0.6){
+   h.type="green";       // 🟢 common target
+   h.innerText="🟢";
+ } else if(r > 0.25){
+   h.type="good";        // ❤️ filler
    h.innerText="❤️";
  } else {
-   h.type="bad";
+   h.type="bad";         // 🖤 danger
    h.innerHTML = "<span style='color:black; filter: drop-shadow(0 0 3px white);'>🖤</span>";
  }
 
@@ -136,6 +139,11 @@ setInterval(()=>{
        beep(500,0.1);
      }
 
+     if(h.type==="green"){
+       time += 3;
+       beep(700,0.1);
+     }
+
      if(h.type==="power"){
        time += 10;
        beep(900,0.15);
@@ -160,7 +168,7 @@ setInterval(()=>{
  if(time <= 0){
    playing=false;
    document.getElementById("centerMsg").innerText =
-     "💀 Survived: 0 — Tap to try again";
+     "💀 Survived: " + Math.floor(performance.now()/1000) + "s — Tap to try again";
  }
 
  // UI
