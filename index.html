@@ -12,69 +12,58 @@ canvas { display:block; }
  text-align:center;
  color:white;
  font-family:sans-serif;
- font-size:18px;
+ font-size:20px;
 }
 </style>
 </head>
 <body>
 
-<div id="ui">Tap anywhere to start</div>
+<div id="ui">Tap to Start</div>
 <canvas id="c"></canvas>
 
 <script>
-const c = document.getElementById("c");
-const ctx = c.getContext("2d");
+const c=document.getElementById("c");
+const ctx=c.getContext("2d");
 
-c.width = innerWidth;
-c.height = innerHeight;
+c.width=innerWidth;
+c.height=innerHeight;
 
-let player = {x:c.width/2, y:c.height/2};
-let enemies = [];
-let score = 0;
-let combo = 0;
-let playing = false;
+let player, hearts;
+let score=0, playing=false, speed=1;
 
-// START GAME
+// start
+document.body.addEventListener("mousedown",start);
+document.body.addEventListener("touchstart",start);
+
 function start(){
- playing = true;
- enemies = [];
- score = 0;
- combo = 0;
+ player={x:c.width/2,y:c.height/2};
+ hearts=[];
+ score=0;
+ speed=1;
+ playing=true;
 }
-
-// tap starts game AND moves player instantly
-document.body.addEventListener("touchstart", e=>{
- start();
- move(e);
-});
-document.body.addEventListener("mousedown", e=>{
- start();
- move(e);
-});
 
 // movement
+c.addEventListener("mousemove",move);
+c.addEventListener("touchmove",move);
+
 function move(e){
  if(!playing) return;
- let x = e.touches ? e.touches[0].clientX : e.clientX;
- let y = e.touches ? e.touches[0].clientY : e.clientY;
+ let x=e.touches?e.touches[0].clientX:e.clientX;
+ let y=e.touches?e.touches[0].clientY:e.clientY;
 
- player.x = x;
- player.y = y;
+ player.x += (x-player.x)*0.25;
+ player.y += (y-player.y)*0.25;
 }
 
-c.addEventListener("touchmove", move);
-c.addEventListener("mousemove", move);
-
-// spawn enemies
+// spawn
 function spawn(){
- let angle = Math.random()*Math.PI*2;
- let dist = Math.max(c.width,c.height);
-
- enemies.push({
-   x: player.x + Math.cos(angle)*dist,
-   y: player.y + Math.sin(angle)*dist,
-   speed: 1.5 + score*0.02,
-   near:false
+ hearts.push({
+   x:Math.random()*c.width,
+   y:Math.random()*c.height,
+   vx:(Math.random()-0.5)*3*speed,
+   vy:(Math.random()-0.5)*3*speed,
+   good:Math.random()>0.3
  });
 }
 
@@ -82,33 +71,32 @@ function spawn(){
 function update(){
  if(!playing) return;
 
- score += 0.03;
+ if(Math.random()<0.05) spawn();
 
- if(Math.random() < 0.03) spawn();
+ speed += 0.0005;
 
- enemies.forEach(e=>{
-   let dx = player.x - e.x;
-   let dy = player.y - e.y;
-   let d = Math.hypot(dx,dy);
+ hearts.forEach(h=>{
+   h.x += h.vx;
+   h.y += h.vy;
 
-   e.x += dx/d * e.speed;
-   e.y += dy/d * e.speed;
+   let d=Math.hypot(player.x-h.x,player.y-h.y);
 
-   if(d < 18){
-     playing = false;
+   if(d<20){
+     if(h.good){
+       score++;
+     } else {
+       playing=false;
+     }
+     h.x=-100;
    }
-
-   if(d < 40 && !e.near){
-     e.near = true;
-     combo++;
-   }
-   if(d > 50) e.near = false;
  });
+
+ hearts=hearts.filter(h=>h.x>-50);
 }
 
 // draw heart
 function heart(x,y,s,color){
- ctx.fillStyle = color;
+ ctx.fillStyle=color;
  ctx.beginPath();
  ctx.moveTo(x,y);
  ctx.bezierCurveTo(x,y-s/2,x-s,y-s/2,x-s,y);
@@ -120,26 +108,28 @@ function heart(x,y,s,color){
 
 // draw
 function draw(){
- ctx.fillStyle = "#020617";
+ ctx.fillStyle="#020617";
  ctx.fillRect(0,0,c.width,c.height);
 
- enemies.forEach(e=>{
-   heart(e.x,e.y,10,"#ff4d6d");
+ hearts.forEach(h=>{
+   heart(h.x,h.y,12, h.good?"red":"#555");
  });
 
- ctx.shadowColor = "red";
- ctx.shadowBlur = 25;
- heart(player.x,player.y,14,"red");
- ctx.shadowBlur = 0;
+ if(player){
+   ctx.shadowColor="red";
+   ctx.shadowBlur=25;
+   heart(player.x,player.y,14,"pink");
+   ctx.shadowBlur=0;
+ }
 
- let ui = document.getElementById("ui");
+ let ui=document.getElementById("ui");
 
  if(playing){
-   ui.innerText = "Score: " + score.toFixed(1) + " | Combo: " + combo;
+   ui.innerText="Score: "+score;
  } else {
-   ui.innerText = score > 0
-     ? "💔 " + score.toFixed(1) + " | Combo " + combo + " — Tap to retry"
-     : "Tap anywhere to start";
+   ui.innerText = score>0
+     ? "💔 "+score+" — Tap to retry"
+     : "Tap to Start";
  }
 
  requestAnimationFrame(draw);
