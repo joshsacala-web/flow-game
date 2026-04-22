@@ -42,79 +42,68 @@ body { margin:0; background:#020617; overflow:hidden; font-family:sans-serif; co
 <script>
 let player = document.getElementById("player");
 let hearts = [];
-let time = 15;
+let time = 10; // less starting time
 let playing = false;
 let difficulty = 1;
 
-// AUDIO
+// audio
 let ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
-
-function beep(freq,duration){
- let osc = ctxAudio.createOscillator();
- let gain = ctxAudio.createGain();
- osc.connect(gain);
- gain.connect(ctxAudio.destination);
- osc.frequency.value = freq;
- osc.start();
- gain.gain.setValueAtTime(0.1, ctxAudio.currentTime);
- osc.stop(ctxAudio.currentTime + duration);
+function beep(f,d){
+ let o=ctxAudio.createOscillator();
+ let g=ctxAudio.createGain();
+ o.connect(g); g.connect(ctxAudio.destination);
+ o.frequency.value=f;
+ o.start();
+ g.gain.setValueAtTime(0.1, ctxAudio.currentTime);
+ o.stop(ctxAudio.currentTime+d);
 }
 
 // start
-document.body.addEventListener("click", start);
-
-function start(){
+document.body.addEventListener("click",()=>{
  if(playing) return;
-
- playing = true;
- time = 15;
- difficulty = 1;
-
+ playing=true;
+ time=10;
+ difficulty=1;
  hearts.forEach(h=>h.remove());
  hearts=[];
-
  document.getElementById("centerMsg").innerText="";
-}
+});
 
-// movement
-document.addEventListener("mousemove", move);
-document.addEventListener("touchmove", move);
+// move
+document.addEventListener("mousemove",move);
+document.addEventListener("touchmove",move);
 
 function move(e){
- let x = e.touches ? e.touches[0].clientX : e.clientX;
- let y = e.touches ? e.touches[0].clientY : e.clientY;
-
- player.style.left = x + "px";
- player.style.top = y + "px";
+ let x=e.touches?e.touches[0].clientX:e.clientX;
+ let y=e.touches?e.touches[0].clientY:e.clientY;
+ player.style.left=x+"px";
+ player.style.top=y+"px";
 }
 
-// spawn (FIXED BALANCE)
+// spawn (hard tuned)
 function spawn(){
- let h = document.createElement("div");
- h.className = "heart";
+ let h=document.createElement("div");
+ h.className="heart";
 
- let r = Math.random();
+ let r=Math.random();
 
- if(r > 0.92){
-   h.type="power"; // 💛 rare
-   h.innerText="💛";
- } else if(r > 0.5){
-   h.type="green"; // 🟢 COMMON
-   h.innerText="🟢";
- } else if(r > 0.2){
-   h.type="good"; // ❤️
-   h.innerText="❤️";
+ if(r>0.95){
+   h.type="power"; h.innerText="💛"; // very rare
+ } else if(r>0.6){
+   h.type="green"; h.innerText="🟢";
+ } else if(r>0.3){
+   h.type="good"; h.innerText="❤️";
  } else {
-   h.type="bad"; // 🖤 more frequent
-   h.innerHTML = "<span style='color:black; filter: drop-shadow(0 0 3px white);'>🖤</span>";
+   h.type="bad";
+   h.innerHTML="<span style='color:black; filter: drop-shadow(0 0 3px white);'>🖤</span>";
  }
 
- h.x = Math.random()*innerWidth;
- h.y = -20;
- h.speed = 2 + Math.random()*2 + difficulty;
+ h.x=Math.random()*innerWidth;
+ h.y=-20;
+ h.speed=3 + Math.random()*3 + difficulty;
 
- h.style.left = h.x+"px";
- h.style.top = h.y+"px";
+ h.style.left=h.x+"px";
+ h.style.top=h.y+"px";
 
  document.body.appendChild(h);
  hearts.push(h);
@@ -125,40 +114,26 @@ setInterval(()=>{
 
  if(!playing) return;
 
- // increasing difficulty
- difficulty += 0.0008;
+ difficulty += 0.002; // faster ramp
 
- // faster spawn over time
- if(Math.random() < 0.15 + difficulty*0.02) spawn();
+ // more spawns over time
+ if(Math.random() < 0.2 + difficulty*0.03) spawn();
 
  hearts.forEach(h=>{
    h.y += h.speed;
    h.style.top = h.y+"px";
 
-   let px = player.offsetLeft;
-   let py = player.offsetTop;
+   let px=player.offsetLeft;
+   let py=player.offsetTop;
 
-   if(Math.abs(px-h.x)<30 && Math.abs(py-h.y)<30){
+   let hitRange = (h.type==="bad") ? 40 : 30; // black harder to avoid
 
-     if(h.type==="good"){
-       time += 1;
-       beep(500,0.08);
-     }
+   if(Math.abs(px-h.x)<hitRange && Math.abs(py-h.y)<hitRange){
 
-     if(h.type==="green"){
-       time += 3;
-       beep(700,0.08);
-     }
-
-     if(h.type==="power"){
-       time += 10;
-       beep(900,0.12);
-     }
-
-     if(h.type==="bad"){
-       time -= 10;
-       beep(200,0.15);
-     }
+     if(h.type==="good"){ time+=1; beep(500,0.07); }
+     if(h.type==="green"){ time+=2; beep(700,0.07); } // nerfed slightly
+     if(h.type==="power"){ time+=8; beep(900,0.1); }  // nerfed slightly
+     if(h.type==="bad"){ time-=12; beep(180,0.15); }  // harsher
 
      h.remove();
    }
@@ -168,13 +143,12 @@ setInterval(()=>{
 
  hearts = hearts.filter(h=>h.isConnected);
 
- // timer drains faster over time
- time -= 0.04 + difficulty*0.01;
+ // faster drain
+ time -= 0.06 + difficulty*0.02;
 
- if(time <= 0){
+ if(time<=0){
    playing=false;
-   document.getElementById("centerMsg").innerText =
-     "💀 Survived — Tap to try again";
+   document.getElementById("centerMsg").innerText="💀 Game Over — Tap to retry";
  }
 
  document.getElementById("ui").innerText =
