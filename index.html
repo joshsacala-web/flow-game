@@ -4,6 +4,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 body { margin:0; background:#020617; overflow:hidden; }
+canvas { display:block; }
+
 #ui{
  position:fixed;
  top:10px;
@@ -13,7 +15,6 @@ body { margin:0; background:#020617; overflow:hidden; }
  font-family:sans-serif;
  font-size:22px;
 }
-canvas{ display:block; }
 </style>
 </head>
 <body>
@@ -28,60 +29,40 @@ const ctx = c.getContext("2d");
 c.width = innerWidth;
 c.height = innerHeight;
 
-let heart, score=0, playing=false;
-let timer=1000;
+let player, hearts=[];
+let playing=false, score=0;
 
-// start game
+// start
 document.body.addEventListener("touchstart",()=>{
- if(!playing){
-   startGame();
- }
+ if(!playing) startGame();
 });
 
 function startGame(){
+ player = {x:c.width/2};
+ hearts=[];
  score=0;
- timer=1000;
  playing=true;
- spawnHeart();
 }
 
-function spawnHeart(){
- heart = {
-   x: Math.random()*(c.width-100)+50,
-   y: Math.random()*(c.height-150)+80,
-   size: 30
- };
-
- setTimeout(()=>{
-   if(playing){
-     // missed
-     playing=false;
-   }
- }, timer);
-
- // speed up
- timer *= 0.92;
+// spawn
+function spawn(){
+ hearts.push({
+   x: Math.random()*c.width,
+   y: -20,
+   speed: 2 + Math.random()*2 + score*0.05,
+   good: Math.random() > 0.3 // 70% good, 30% bad
+ });
 }
 
-// tap detection
-c.addEventListener("touchstart",e=>{
+// movement
+c.addEventListener("touchmove",e=>{
  if(!playing) return;
-
- let t = e.touches[0];
- let dx = t.clientX - heart.x;
- let dy = t.clientY - heart.y;
-
- if(Math.hypot(dx,dy) < heart.size){
-   score++;
-   spawnHeart();
- } else {
-   playing=false;
- }
+ player.x = e.touches[0].clientX;
 });
 
 // heart draw
-function drawHeart(x,y,s){
- ctx.fillStyle="red";
+function drawHeart(x,y,s,color){
+ ctx.fillStyle=color;
  ctx.beginPath();
  ctx.moveTo(x,y);
  ctx.bezierCurveTo(x,y-s/2,x-s,y-s/2,x-s,y);
@@ -91,24 +72,67 @@ function drawHeart(x,y,s){
  ctx.fill();
 }
 
-// draw loop
+// update
+function update(){
+ if(!playing) return;
+
+ if(Math.random()<0.03) spawn();
+
+ hearts.forEach(h=>{
+   h.y += h.speed;
+
+   // collision
+   if(Math.abs(h.x - player.x) < 30 && h.y > c.height-80){
+     if(h.good){
+       score++;
+     } else {
+       playing=false;
+     }
+     h.y = c.height+100;
+   }
+
+   // miss good heart
+   if(h.good && h.y > c.height){
+     playing=false;
+   }
+ });
+
+ hearts = hearts.filter(h=>h.y < c.height+50);
+}
+
+// draw
 function draw(){
  ctx.fillStyle="#020617";
  ctx.fillRect(0,0,c.width,c.height);
 
- if(playing && heart){
-   drawHeart(heart.x,heart.y,heart.size);
-   document.getElementById("ui").innerText="Score: "+score;
+ // falling hearts
+ hearts.forEach(h=>{
+   drawHeart(h.x,h.y,15, h.good ? "red" : "#555");
+ });
+
+ // player
+ drawHeart(player?.x || 0, c.height-50, 20, "pink");
+
+ // UI
+ let ui=document.getElementById("ui");
+
+ if(playing){
+   ui.innerText="Score: "+score;
  } else {
-   document.getElementById("ui").innerText =
-     score>0 ? "💔 Score: "+score+" — Tap to retry"
-             : "Tap to Start";
+   ui.innerText = score>0
+     ? "💔 Score: "+score+" — Tap to retry"
+     : "Tap to Start";
  }
 
  requestAnimationFrame(draw);
 }
 
-draw();
+function loop(){
+ update();
+ draw();
+}
+
+loop();
 </script>
 
 </body>
