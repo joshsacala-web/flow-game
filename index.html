@@ -12,7 +12,7 @@ canvas { display:block; }
  text-align:center;
  color:white;
  font-family:sans-serif;
- font-size:18px;
+ font-size:20px;
 }
 </style>
 </head>
@@ -22,108 +22,46 @@ canvas { display:block; }
 <canvas id="c"></canvas>
 
 <script>
-const c=document.getElementById("c");
-const ctx=c.getContext("2d");
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
 
-c.width=innerWidth;
-c.height=innerHeight;
+c.width = innerWidth;
+c.height = innerHeight;
 
-let player, enemies, particles;
-let score, combo, playing, slowMo, shake;
+let player, enemies, score, playing;
 
 // start
-document.body.addEventListener("touchstart",()=>start());
+document.body.addEventListener("touchstart", startGame);
 
-function start(){
- player={x:c.width/2,y:c.height/2};
- enemies=[];
- particles=[];
- score=0;
- combo=0;
- playing=true;
- slowMo=0;
- shake=0;
+function startGame(){
+ player = {x:c.width/2, y:c.height/2};
+ enemies = [];
+ score = 0;
+ playing = true;
 }
 
-// control
-c.addEventListener("touchmove",e=>{
+// movement
+c.addEventListener("touchmove", e=>{
  if(!playing) return;
- player.x=e.touches[0].clientX;
- player.y=e.touches[0].clientY;
+ player.x = e.touches[0].clientX;
+ player.y = e.touches[0].clientY;
 });
 
-// spawn smarter
+// spawn enemies
 function spawn(){
- let angle=Math.random()*Math.PI*2;
- let dist=Math.max(c.width,c.height);
+ let side = Math.floor(Math.random()*4);
+ let e = {x:0,y:0};
 
- enemies.push({
-   x:player.x+Math.cos(angle)*dist,
-   y:player.y+Math.sin(angle)*dist,
-   speed:1.5 + score*0.015,
-   near:false
- });
+ if(side===0){ e.x=0; e.y=Math.random()*c.height; }
+ if(side===1){ e.x=c.width; e.y=Math.random()*c.height; }
+ if(side===2){ e.x=Math.random()*c.width; e.y=0; }
+ if(side===3){ e.x=Math.random()*c.width; e.y=c.height; }
+
+ e.speed = 1.5 + score*0.02;
+ enemies.push(e);
 }
 
-// particles
-function burst(x,y){
- for(let i=0;i<10;i++){
-   particles.push({
-     x,y,
-     vx:(Math.random()-0.5)*4,
-     vy:(Math.random()-0.5)*4,
-     life:30
-   });
- }
-}
-
-// update
-function update(){
- if(!playing) return;
-
- score+=0.03 + combo*0.002;
-
- if(Math.random()<0.025 + score*0.0002) spawn();
-
- let scale=slowMo>0?0.4:1;
-
- enemies.forEach(e=>{
-   let dx=player.x-e.x;
-   let dy=player.y-e.y;
-   let d=Math.hypot(dx,dy);
-
-   e.x+=dx/d*e.speed*scale;
-   e.y+=dy/d*e.speed*scale;
-
-   if(d<18){
-     playing=false;
-     shake=20;
-     burst(player.x,player.y);
-   }
-
-   if(d<40 && !e.near){
-     e.near=true;
-     combo++;
-     slowMo=8;
-     burst(e.x,e.y);
-   }
-
-   if(d>50) e.near=false;
- });
-
- particles.forEach(p=>{
-   p.x+=p.vx;
-   p.y+=p.vy;
-   p.life--;
- });
-
- particles=particles.filter(p=>p.life>0);
-
- if(slowMo>0) slowMo--;
- if(shake>0) shake--;
-}
-
-// heart
+// heart draw
 function heart(x,y,s,color){
  ctx.fillStyle=color;
  ctx.beginPath();
@@ -135,43 +73,51 @@ function heart(x,y,s,color){
  ctx.fill();
 }
 
+// update
+function update(){
+ if(!playing) return;
+
+ score += 0.02;
+
+ if(Math.random()<0.03) spawn();
+
+ enemies.forEach(e=>{
+   let dx = player.x - e.x;
+   let dy = player.y - e.y;
+   let d = Math.hypot(dx,dy);
+
+   e.x += dx/d * e.speed;
+   e.y += dy/d * e.speed;
+
+   if(d < 20){
+     playing = false;
+   }
+ });
+}
+
 // draw
 function draw(){
+ ctx.fillStyle="#020617";
+ ctx.fillRect(0,0,c.width,c.height);
 
- let offsetX = shake>0 ? (Math.random()-0.5)*10 : 0;
- let offsetY = shake>0 ? (Math.random()-0.5)*10 : 0;
-
- ctx.setTransform(1,0,0,1,offsetX,offsetY);
-
- ctx.fillStyle= slowMo>0 ? "#05010a" : "#020617";
- ctx.fillRect(-50,-50,c.width+100,c.height+100);
-
- // enemies
  enemies.forEach(e=>{
    heart(e.x,e.y,10,"#ff4d6d");
  });
 
- // particles
- particles.forEach(p=>{
-   ctx.fillStyle="white";
-   ctx.fillRect(p.x,p.y,2,2);
- });
+ if(player){
+   ctx.shadowColor="red";
+   ctx.shadowBlur=20;
+   heart(player.x,player.y,14,"red");
+   ctx.shadowBlur=0;
+ }
 
- // player
- ctx.shadowColor="red";
- ctx.shadowBlur=25;
- heart(player.x,player.y,14,"red");
- ctx.shadowBlur=0;
-
- ctx.setTransform(1,0,0,1,0,0);
-
- let ui=document.getElementById("ui");
+ let ui = document.getElementById("ui");
 
  if(playing){
-   ui.innerText="Score: "+score.toFixed(1)+" | Combo: "+combo;
+   ui.innerText = "Score: " + score.toFixed(1);
  } else {
    ui.innerText = score>0
-     ? "💔 "+score.toFixed(1)+" | Combo "+combo+" — Tap"
+     ? "💔 " + score.toFixed(1) + " — Tap to retry"
      : "Tap to Start";
  }
 
