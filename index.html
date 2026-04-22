@@ -42,10 +42,6 @@ canvas { display:block; }
 <canvas id="c"></canvas>
 <div id="joy"><div id="stick"></div></div>
 
-<audio id="music" loop>
-<source src="https://cdn.pixabay.com/audio/2022/11/03/audio_7b9c7b5a6e.mp3">
-</audio>
-
 <script>
 const c = document.getElementById("c");
 const ctx = c.getContext("2d");
@@ -53,18 +49,31 @@ const ctx = c.getContext("2d");
 c.width = innerWidth;
 c.height = innerHeight;
 
-let player = {x:c.width/2,y:c.height/2};
-let joy={x:0,y:0};
+let player, joy={x:0,y:0};
+let enemies=[];
+let startTime, alive=false;
 
-let started=false;
 let combo=0;
-let score=0;
+let slowMo=0;
 
-// 🎵 beat system
-let bpm = 70;
-let beatInterval = 60000 / bpm;
-let lastBeat = Date.now();
-let beatPulse = 0;
+// 🎧 AUDIO (simple + reliable)
+let audioCtx;
+function beep(freq, duration){
+ if(!audioCtx) return;
+ let osc = audioCtx.createOscillator();
+ let gain = audioCtx.createGain();
+ osc.connect(gain);
+ gain.connect(audioCtx.destination);
+ osc.frequency.value = freq;
+ osc.start();
+ gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+ gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+ osc.stop(audioCtx.currentTime + duration);
+}
+
+// heartbeat timing
+let lastBeat=0;
+let beatInterval=800;
 
 // joystick
 const joyDiv=document.getElementById("joy");
@@ -91,45 +100,87 @@ joyDiv.ontouchend=()=>{
 
 // start
 document.body.addEventListener("touchstart",()=>{
- if(!started){
-   started=true;
-   document.getElementById("ui").innerText="";
-   document.getElementById("music").play().catch(()=>{});
- }
-},{once:true});
+ if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+ startGame();
+});
+
+// start game
+function startGame(){
+ player = {x:c.width/2,y:c.height/2};
+ enemies=[];
+ startTime=Date.now();
+ alive=true;
+ combo=0;
+}
+
+// spawn
+function spawn(){
+ let side=Math.floor(Math.random()*4);
+ let e={x:0,y:0,speed:2+Math.random()*2,near:false};
+
+ if(side===0){ e.x=0; e.y=Math.random()*c.height; }
+ if(side===1){ e.x=c.width; e.y=Math.random()*c.height; }
+ if(side===2){ e.x=Math.random()*c.width; e.y=0; }
+ if(side===3){ e.x=Math.random()*c.width; e.y=c.height; }
+
+ enemies.push(e);
+}
 
 // update
 function update(){
 
- if(!started) return;
+ if(!alive) return;
 
- let now = Date.now();
+ if(Math.random()<0.03) spawn();
 
- // beat pulse
- if(now - lastBeat > beatInterval){
-   lastBeat = now;
-   beatPulse = 1;
+ let speedScale = slowMo>0 ? 0.4 : 1;
 
-   // 🔥 scoring check
-   let movement = Math.hypot(joy.x,joy.y);
-   if(movement > 0.3){
-     combo++;
-     score += combo;
-   } else {
-     combo = 0;
-   }
+ // player
+ player.x+=joy.x*4*speedScale;
+ player.y+=joy.y*4*speedScale;
+
+ player.x=Math.max(20,Math.min(c.width-20,player.x));
+ player.y=Math.max(20,Math.min(c.height-20,player.y));
+
+ // heartbeat
+ let now=Date.now();
+ if(now-lastBeat>beatInterval){
+   lastBeat=now;
+   beep(120,0.1); // 💓 heartbeat sound
  }
 
- beatPulse *= 0.9;
+ // enemies
+ enemies.forEach(e=>{
+   let dx=player.x-e.x;
+   let dy=player.y-e.y;
+   let d=Math.hypot(dx,dy);
 
- // movement
- let speed = 2.5;
- player.x += joy.x * speed;
- player.y += joy.y * speed;
+   e.x+=dx/d*e.speed*speedScale;
+   e.y+=dy/d*e.speed*speedScale;
+
+   // collision
+   if(d<20){
+     alive=false;
+     beep(60,0.3); // 💥 death sound
+   }
+
+   // near miss
+   if(d<40 && !e.near){
+     e.near=true;
+     combo++;
+     slowMo=10;
+     beep(400,0.05); // 🔊 near miss
+   }
+
+   if(d>50) e.near=false;
+ });
+
+ if(slowMo>0) slowMo--;
 }
 
 // heart
-function heart(x,y,s){
+function heart(x,y,s,color){
+ ctx.fillStyle=color;
  ctx.beginPath();
  ctx.moveTo(x,y);
  ctx.bezierCurveTo(x,y-s/2,x-s,y-s/2,x-s,y);
@@ -141,25 +192,30 @@ function heart(x,y,s){
 
 // draw
 function draw(){
- ctx.fillStyle="#020617";
+ ctx.fillStyle = slowMo>0 ? "#05010a" : "#020617";
  ctx.fillRect(0,0,c.width,c.height);
 
- // pulse background
- ctx.fillStyle=`rgba(255,0,0,${beatPulse*0.2})`;
- ctx.fillRect(0,0,c.width,c.height);
+ enemies.forEach(e=>{
+   heart(e.x,e.y,10,"#ff4d6d");
+ });
 
- // heart scale with beat
- let size = 20 + beatPulse*10;
+ // pulsing player
+ let pulse = Math.sin(Date.now()/200)*2;
 
  ctx.shadowColor="red";
  ctx.shadowBlur=30;
- ctx.fillStyle="red";
- heart(player.x,player.y,size);
+ heart(player.x,player.y,14+pulse,"red");
  ctx.shadowBlur=0;
 
- // UI
- document.getElementById("ui").innerText =
-  "Score: "+score+" | Combo: "+combo;
+ let ui=document.getElementById("ui");
+
+ if(alive){
+   let t=((Date.now()-startTime)/1000).toFixed(1);
+   ui.innerText="Time: "+t+"s | Combo: "+combo;
+ }else{
+   let t=((Date.now()-startTime)/1000).toFixed(1);
+   ui.innerText="💔 "+t+"s | Combo: "+combo+" — Tap to retry";
+ }
 }
 
 function loop(){
