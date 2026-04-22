@@ -42,8 +42,9 @@ body { margin:0; background:#020617; overflow:hidden; font-family:sans-serif; co
 <script>
 let player = document.getElementById("player");
 let hearts = [];
-let time = 20;
+let time = 15;
 let playing = false;
+let difficulty = 1;
 
 // AUDIO
 let ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
@@ -66,7 +67,8 @@ function start(){
  if(playing) return;
 
  playing = true;
- time = 20;
+ time = 15;
+ difficulty = 1;
 
  hearts.forEach(h=>h.remove());
  hearts=[];
@@ -86,30 +88,30 @@ function move(e){
  player.style.top = y + "px";
 }
 
-// spawn (balanced probabilities)
+// spawn (FIXED BALANCE)
 function spawn(){
  let h = document.createElement("div");
  h.className = "heart";
 
  let r = Math.random();
 
- if(r > 0.9){
-   h.type="power";       // 💛 rare
+ if(r > 0.92){
+   h.type="power"; // 💛 rare
    h.innerText="💛";
- } else if(r > 0.6){
-   h.type="green";       // 🟢 common target
+ } else if(r > 0.5){
+   h.type="green"; // 🟢 COMMON
    h.innerText="🟢";
- } else if(r > 0.25){
-   h.type="good";        // ❤️ filler
+ } else if(r > 0.2){
+   h.type="good"; // ❤️
    h.innerText="❤️";
  } else {
-   h.type="bad";         // 🖤 danger
+   h.type="bad"; // 🖤 more frequent
    h.innerHTML = "<span style='color:black; filter: drop-shadow(0 0 3px white);'>🖤</span>";
  }
 
  h.x = Math.random()*innerWidth;
  h.y = -20;
- h.speed = 2 + Math.random()*2;
+ h.speed = 2 + Math.random()*2 + difficulty;
 
  h.style.left = h.x+"px";
  h.style.top = h.y+"px";
@@ -123,7 +125,11 @@ setInterval(()=>{
 
  if(!playing) return;
 
- if(Math.random()<0.12) spawn();
+ // increasing difficulty
+ difficulty += 0.0008;
+
+ // faster spawn over time
+ if(Math.random() < 0.15 + difficulty*0.02) spawn();
 
  hearts.forEach(h=>{
    h.y += h.speed;
@@ -136,22 +142,22 @@ setInterval(()=>{
 
      if(h.type==="good"){
        time += 1;
-       beep(500,0.1);
+       beep(500,0.08);
      }
 
      if(h.type==="green"){
        time += 3;
-       beep(700,0.1);
+       beep(700,0.08);
      }
 
      if(h.type==="power"){
        time += 10;
-       beep(900,0.15);
+       beep(900,0.12);
      }
 
      if(h.type==="bad"){
        time -= 10;
-       beep(200,0.2);
+       beep(200,0.15);
      }
 
      h.remove();
@@ -162,16 +168,15 @@ setInterval(()=>{
 
  hearts = hearts.filter(h=>h.isConnected);
 
- // timer drain
- time -= 0.03;
+ // timer drains faster over time
+ time -= 0.04 + difficulty*0.01;
 
  if(time <= 0){
    playing=false;
    document.getElementById("centerMsg").innerText =
-     "💀 Survived: " + Math.floor(performance.now()/1000) + "s — Tap to try again";
+     "💀 Survived — Tap to try again";
  }
 
- // UI
  document.getElementById("ui").innerText =
    "Time: "+Math.max(0,time.toFixed(1));
 
