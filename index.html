@@ -47,9 +47,9 @@ let time = 15;
 let playing = false;
 let difficulty = 1;
 
-// NEW: score tracking
+// SCORE SYSTEM
 let survivalTime = 0;
-let bestTime = localStorage.getItem("bestTime") || 0;
+let bestTime = parseFloat(localStorage.getItem("bestTime")) || 0;
 
 // AUDIO
 let ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
@@ -65,7 +65,7 @@ function beep(freq,duration){
  osc.stop(ctxAudio.currentTime + duration);
 }
 
-// start
+// START GAME
 document.body.addEventListener("click", start);
 
 function start(){
@@ -82,7 +82,7 @@ function start(){
  document.getElementById("centerMsg").innerText="";
 }
 
-// movement
+// MOVEMENT
 document.addEventListener("mousemove", move);
 document.addEventListener("touchmove", move);
 
@@ -94,7 +94,7 @@ function move(e){
  player.style.top = y + "px";
 }
 
-// spawn
+// SPAWN HEARTS
 function spawn(){
  let h = document.createElement("div");
  h.className = "heart";
@@ -123,7 +123,7 @@ function spawn(){
  hearts.push(h);
 }
 
-// loop
+// GAME LOOP
 setInterval(()=>{
 
  if(!playing) return;
@@ -164,10 +164,10 @@ setInterval(()=>{
 
  hearts = hearts.filter(h=>h.isConnected);
 
- // track survival time
+ // TRACK SURVIVAL
  survivalTime += 0.03;
 
- // time drain
+ // TIME DRAIN
  time -= 0.04 + difficulty*0.01;
 
  if(time <= 0){
