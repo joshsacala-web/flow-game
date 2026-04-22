@@ -3,109 +3,182 @@
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body {
-  margin:0;
-  background:#020617;
-  overflow:hidden;
-  font-family:sans-serif;
-  color:white;
-}
+body { margin:0; background:#020617; overflow:hidden; font-family:sans-serif; color:white; }
 
 #ui {
-  position:fixed;
-  top:10px;
-  width:100%;
-  text-align:center;
-  font-size:20px;
+ position:fixed;
+ top:10px;
+ width:100%;
+ text-align:center;
+ font-size:20px;
 }
 
-.heart {
-  position:absolute;
-  font-size:24px;
+#centerMsg{
+ position:fixed;
+ top:50%;
+ width:100%;
+ text-align:center;
+ font-size:28px;
+ transform:translateY(-50%);
 }
+
+.heart { position:absolute; font-size:26px; }
 
 #player {
-  position:absolute;
-  font-size:32px;
-  left:50%;
-  top:50%;
-  transform:translate(-50%,-50%);
+ position:absolute;
+ font-size:36px;
+ left:50%;
+ top:50%;
+ transform:translate(-50%,-50%);
 }
 </style>
 </head>
 <body>
 
-<div id="ui">Score: 0</div>
+<div id="ui"></div>
+<div id="centerMsg">Tap to Start ❤️</div>
 <div id="player">❤️</div>
 
 <script>
 let player = document.getElementById("player");
 let hearts = [];
 let score = 0;
+let power = 0;
+let playing = false;
+let time = 30;
 
-// movement ALWAYS works
+// AUDIO
+let ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
+
+function beep(freq,duration){
+ let osc = ctxAudio.createOscillator();
+ let gain = ctxAudio.createGain();
+ osc.connect(gain);
+ gain.connect(ctxAudio.destination);
+ osc.frequency.value = freq;
+ osc.start();
+ gain.gain.setValueAtTime(0.1, ctxAudio.currentTime);
+ osc.stop(ctxAudio.currentTime + duration);
+}
+
+// start
+document.body.addEventListener("click", start);
+
+function start(){
+ if(playing) return;
+
+ playing = true;
+ score = 0;
+ time = 30;
+ hearts.forEach(h=>h.remove());
+ hearts=[];
+
+ document.getElementById("centerMsg").innerText="";
+}
+
+// movement
 document.addEventListener("mousemove", move);
 document.addEventListener("touchmove", move);
 
 function move(e){
-  let x = e.touches ? e.touches[0].clientX : e.clientX;
-  let y = e.touches ? e.touches[0].clientY : e.clientY;
+ let x = e.touches ? e.touches[0].clientX : e.clientX;
+ let y = e.touches ? e.touches[0].clientY : e.clientY;
 
-  player.style.left = x + "px";
-  player.style.top = y + "px";
+ player.style.left = x + "px";
+ player.style.top = y + "px";
 }
 
-// spawn hearts
+// spawn
 function spawn(){
-  let h = document.createElement("div");
-  h.className = "heart";
-  h.innerText = Math.random() > 0.3 ? "❤️" : "💔";
+ let h = document.createElement("div");
+ h.className = "heart";
 
-  h.x = Math.random()*innerWidth;
-  h.y = -20;
-  h.speed = 2 + Math.random()*2;
+ let r = Math.random();
 
-  h.style.left = h.x + "px";
-  h.style.top = h.y + "px";
+ if(r > 0.8){
+   h.type="power"; h.innerText="💛";
+ } else if(r > 0.3){
+   h.type="good"; h.innerText="❤️";
+ } else {
+   h.type="bad"; h.innerText="💔";
+ }
 
-  document.body.appendChild(h);
-  hearts.push(h);
+ h.x = Math.random()*innerWidth;
+ h.y = -20;
+ h.speed = 2 + Math.random()*2;
+
+ h.style.left = h.x+"px";
+ h.style.top = h.y+"px";
+
+ document.body.appendChild(h);
+ hearts.push(h);
 }
 
-// LOOP ALWAYS RUNS (no start needed)
+// loop
 setInterval(()=>{
 
-  // spawn constantly
-  if(Math.random() < 0.12) spawn();
+ if(!playing) return;
 
-  hearts.forEach(h=>{
-    h.y += h.speed;
-    h.style.top = h.y + "px";
+ if(Math.random()<0.12) spawn();
 
-    let px = player.offsetLeft;
-    let py = player.offsetTop;
+ if(power>0) power--;
 
-    // collision
-    if(Math.abs(px - h.x) < 30 && Math.abs(py - h.y) < 30){
-      if(h.innerText === "❤️"){
-        score++;
-        document.getElementById("ui").innerText = "Score: " + score;
-      } else {
-        // reset game instantly
-        score = 0;
-        document.getElementById("ui").innerText = "💔 Game Over — Score reset";
-      }
-      h.remove();
-    }
+ hearts.forEach(h=>{
+   h.y += h.speed;
+   h.style.top = h.y+"px";
 
-    if(h.y > innerHeight){
-      h.remove();
-    }
-  });
+   let px = player.offsetLeft;
+   let py = player.offsetTop;
 
-  hearts = hearts.filter(h => h.isConnected);
+   if(Math.abs(px-h.x)<30 && Math.abs(py-h.y)<30){
 
-}, 30);
+     if(h.type==="good"){
+       score++;
+       beep(500,0.1);
+     }
+
+     if(h.type==="power"){
+       score+=5;
+       power=90;
+       beep(900,0.15);
+     }
+
+     if(h.type==="bad"){
+       if(power<=0){
+         score=Math.max(0,score-3);
+         beep(200,0.2);
+       }
+     }
+
+     h.remove();
+   }
+
+   if(h.y>innerHeight) h.remove();
+ });
+
+ hearts = hearts.filter(h=>h.isConnected);
+
+ // timer
+ time -= 0.03;
+
+ if(time<=0){
+   playing=false;
+   document.getElementById("centerMsg").innerText =
+     "🏁 Final Score: "+score+" — Tap to play again";
+ }
+
+ // UI
+ document.getElementById("ui").innerText =
+   "Score: "+score+" | Time: "+time.toFixed(0);
+
+ // power glow
+ if(power>0){
+   player.style.filter="drop-shadow(0 0 15px yellow)";
+ } else {
+   player.style.filter="none";
+ }
+
+},30);
 </script>
 
 </body>
