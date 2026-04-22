@@ -3,29 +3,7 @@
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body { margin:0; background:black; overflow:hidden; }
-canvas { display:block; }
-
-#joy{
- position:fixed;
- bottom:40px;
- left:50%;
- transform:translateX(-50%);
- width:120px;
- height:120px;
- border-radius:50%;
- background:rgba(255,255,255,0.08);
-}
-#stick{
- position:absolute;
- width:50px;
- height:50px;
- border-radius:50%;
- background:#ffd166;
- left:35px;
- top:35px;
-}
-
+body { margin:0; background:#020617; overflow:hidden; }
 #ui{
  position:fixed;
  top:10px;
@@ -33,14 +11,15 @@ canvas { display:block; }
  text-align:center;
  color:white;
  font-family:sans-serif;
+ font-size:22px;
 }
+canvas{ display:block; }
 </style>
 </head>
 <body>
 
 <div id="ui">Tap to Start</div>
 <canvas id="c"></canvas>
-<div id="joy"><div id="stick"></div></div>
 
 <script>
 const c = document.getElementById("c");
@@ -49,138 +28,60 @@ const ctx = c.getContext("2d");
 c.width = innerWidth;
 c.height = innerHeight;
 
-let player, joy={x:0,y:0};
-let enemies=[];
-let startTime, alive=false;
-
-let combo=0;
-let slowMo=0;
-
-// 🎧 AUDIO (simple + reliable)
-let audioCtx;
-function beep(freq, duration){
- if(!audioCtx) return;
- let osc = audioCtx.createOscillator();
- let gain = audioCtx.createGain();
- osc.connect(gain);
- gain.connect(audioCtx.destination);
- osc.frequency.value = freq;
- osc.start();
- gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
- gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
- osc.stop(audioCtx.currentTime + duration);
-}
-
-// heartbeat timing
-let lastBeat=0;
-let beatInterval=800;
-
-// joystick
-const joyDiv=document.getElementById("joy");
-const stick=document.getElementById("stick");
-
-joyDiv.ontouchmove=e=>{
- let r=joyDiv.getBoundingClientRect();
- let t=e.touches[0];
- let dx=t.clientX-(r.left+60);
- let dy=t.clientY-(r.top+60);
- let d=Math.hypot(dx,dy);
- if(d>40){ dx*=40/d; dy*=40/d; }
- stick.style.left=(dx+35)+"px";
- stick.style.top=(dy+35)+"px";
- joy.x=dx/40;
- joy.y=dy/40;
-};
-
-joyDiv.ontouchend=()=>{
- joy.x=0; joy.y=0;
- stick.style.left="35px";
- stick.style.top="35px";
-};
-
-// start
-document.body.addEventListener("touchstart",()=>{
- if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
- startGame();
-});
+let heart, score=0, playing=false;
+let timer=1000;
 
 // start game
-function startGame(){
- player = {x:c.width/2,y:c.height/2};
- enemies=[];
- startTime=Date.now();
- alive=true;
- combo=0;
-}
-
-// spawn
-function spawn(){
- let side=Math.floor(Math.random()*4);
- let e={x:0,y:0,speed:2+Math.random()*2,near:false};
-
- if(side===0){ e.x=0; e.y=Math.random()*c.height; }
- if(side===1){ e.x=c.width; e.y=Math.random()*c.height; }
- if(side===2){ e.x=Math.random()*c.width; e.y=0; }
- if(side===3){ e.x=Math.random()*c.width; e.y=c.height; }
-
- enemies.push(e);
-}
-
-// update
-function update(){
-
- if(!alive) return;
-
- if(Math.random()<0.03) spawn();
-
- let speedScale = slowMo>0 ? 0.4 : 1;
-
- // player
- player.x+=joy.x*4*speedScale;
- player.y+=joy.y*4*speedScale;
-
- player.x=Math.max(20,Math.min(c.width-20,player.x));
- player.y=Math.max(20,Math.min(c.height-20,player.y));
-
- // heartbeat
- let now=Date.now();
- if(now-lastBeat>beatInterval){
-   lastBeat=now;
-   beep(120,0.1); // 💓 heartbeat sound
+document.body.addEventListener("touchstart",()=>{
+ if(!playing){
+   startGame();
  }
+});
 
- // enemies
- enemies.forEach(e=>{
-   let dx=player.x-e.x;
-   let dy=player.y-e.y;
-   let d=Math.hypot(dx,dy);
-
-   e.x+=dx/d*e.speed*speedScale;
-   e.y+=dy/d*e.speed*speedScale;
-
-   // collision
-   if(d<20){
-     alive=false;
-     beep(60,0.3); // 💥 death sound
-   }
-
-   // near miss
-   if(d<40 && !e.near){
-     e.near=true;
-     combo++;
-     slowMo=10;
-     beep(400,0.05); // 🔊 near miss
-   }
-
-   if(d>50) e.near=false;
- });
-
- if(slowMo>0) slowMo--;
+function startGame(){
+ score=0;
+ timer=1000;
+ playing=true;
+ spawnHeart();
 }
 
-// heart
-function heart(x,y,s,color){
- ctx.fillStyle=color;
+function spawnHeart(){
+ heart = {
+   x: Math.random()*(c.width-100)+50,
+   y: Math.random()*(c.height-150)+80,
+   size: 30
+ };
+
+ setTimeout(()=>{
+   if(playing){
+     // missed
+     playing=false;
+   }
+ }, timer);
+
+ // speed up
+ timer *= 0.92;
+}
+
+// tap detection
+c.addEventListener("touchstart",e=>{
+ if(!playing) return;
+
+ let t = e.touches[0];
+ let dx = t.clientX - heart.x;
+ let dy = t.clientY - heart.y;
+
+ if(Math.hypot(dx,dy) < heart.size){
+   score++;
+   spawnHeart();
+ } else {
+   playing=false;
+ }
+});
+
+// heart draw
+function drawHeart(x,y,s){
+ ctx.fillStyle="red";
  ctx.beginPath();
  ctx.moveTo(x,y);
  ctx.bezierCurveTo(x,y-s/2,x-s,y-s/2,x-s,y);
@@ -190,41 +91,24 @@ function heart(x,y,s,color){
  ctx.fill();
 }
 
-// draw
+// draw loop
 function draw(){
- ctx.fillStyle = slowMo>0 ? "#05010a" : "#020617";
+ ctx.fillStyle="#020617";
  ctx.fillRect(0,0,c.width,c.height);
 
- enemies.forEach(e=>{
-   heart(e.x,e.y,10,"#ff4d6d");
- });
-
- // pulsing player
- let pulse = Math.sin(Date.now()/200)*2;
-
- ctx.shadowColor="red";
- ctx.shadowBlur=30;
- heart(player.x,player.y,14+pulse,"red");
- ctx.shadowBlur=0;
-
- let ui=document.getElementById("ui");
-
- if(alive){
-   let t=((Date.now()-startTime)/1000).toFixed(1);
-   ui.innerText="Time: "+t+"s | Combo: "+combo;
- }else{
-   let t=((Date.now()-startTime)/1000).toFixed(1);
-   ui.innerText="💔 "+t+"s | Combo: "+combo+" — Tap to retry";
+ if(playing && heart){
+   drawHeart(heart.x,heart.y,heart.size);
+   document.getElementById("ui").innerText="Score: "+score;
+ } else {
+   document.getElementById("ui").innerText =
+     score>0 ? "💔 Score: "+score+" — Tap to retry"
+             : "Tap to Start";
  }
+
+ requestAnimationFrame(draw);
 }
 
-function loop(){
- update();
- draw();
- requestAnimationFrame(loop);
-}
-
-loop();
+draw();
 </script>
 
 </body>
