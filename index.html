@@ -42,68 +42,79 @@ body { margin:0; background:#020617; overflow:hidden; font-family:sans-serif; co
 <script>
 let player = document.getElementById("player");
 let hearts = [];
-let time = 10; // less starting time
+let time = 15;
 let playing = false;
 let difficulty = 1;
 
-// audio
+// AUDIO
 let ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
-function beep(f,d){
- let o=ctxAudio.createOscillator();
- let g=ctxAudio.createGain();
- o.connect(g); g.connect(ctxAudio.destination);
- o.frequency.value=f;
- o.start();
- g.gain.setValueAtTime(0.1, ctxAudio.currentTime);
- o.stop(ctxAudio.currentTime+d);
+
+function beep(freq,duration){
+ let osc = ctxAudio.createOscillator();
+ let gain = ctxAudio.createGain();
+ osc.connect(gain);
+ gain.connect(ctxAudio.destination);
+ osc.frequency.value = freq;
+ osc.start();
+ gain.gain.setValueAtTime(0.1, ctxAudio.currentTime);
+ osc.stop(ctxAudio.currentTime + duration);
 }
 
 // start
-document.body.addEventListener("click",()=>{
+document.body.addEventListener("click", start);
+
+function start(){
  if(playing) return;
- playing=true;
- time=10;
- difficulty=1;
+
+ playing = true;
+ time = 15;
+ difficulty = 1;
+
  hearts.forEach(h=>h.remove());
  hearts=[];
+
  document.getElementById("centerMsg").innerText="";
-});
-
-// move
-document.addEventListener("mousemove",move);
-document.addEventListener("touchmove",move);
-
-function move(e){
- let x=e.touches?e.touches[0].clientX:e.clientX;
- let y=e.touches?e.touches[0].clientY:e.clientY;
- player.style.left=x+"px";
- player.style.top=y+"px";
 }
 
-// spawn (hard tuned)
+// movement
+document.addEventListener("mousemove", move);
+document.addEventListener("touchmove", move);
+
+function move(e){
+ let x = e.touches ? e.touches[0].clientX : e.clientX;
+ let y = e.touches ? e.touches[0].clientY : e.clientY;
+
+ player.style.left = x + "px";
+ player.style.top = y + "px";
+}
+
+// spawn (FINAL COLOR SYSTEM)
 function spawn(){
- let h=document.createElement("div");
- h.className="heart";
+ let h = document.createElement("div");
+ h.className = "heart";
 
- let r=Math.random();
+ let r = Math.random();
 
- if(r>0.95){
-   h.type="power"; h.innerText="💛"; // very rare
- } else if(r>0.6){
-   h.type="green"; h.innerText="🟢";
- } else if(r>0.3){
-   h.type="good"; h.innerText="❤️";
+ if(r > 0.97){
+   h.type="power";
+   h.innerHTML = "<span style='color:#ffd966; filter: drop-shadow(0 0 6px #ffd966);'>💛</span>";
+ } else if(r > 0.7){
+   h.type="green";
+   h.innerHTML = "<span style='color:#6ee7b7;'>❤️</span>";
+ } else if(r > 0.3){
+   h.type="good";
+   h.innerHTML = "<span style='color:#ff6b6b;'>❤️</span>";
  } else {
    h.type="bad";
-   h.innerHTML="<span style='color:black; filter: drop-shadow(0 0 3px white);'>🖤</span>";
+   h.innerHTML = "<span style='color:#a855f7; filter: drop-shadow(0 0 6px #a855f7);'>💜</span>";
  }
 
- h.x=Math.random()*innerWidth;
- h.y=-20;
- h.speed=3 + Math.random()*3 + difficulty;
+ h.x = Math.random()*innerWidth;
+ h.y = -20;
+ h.speed = 3 + Math.random()*2 + difficulty;
 
- h.style.left=h.x+"px";
- h.style.top=h.y+"px";
+ h.style.left = h.x+"px";
+ h.style.top = h.y+"px";
 
  document.body.appendChild(h);
  hearts.push(h);
@@ -114,26 +125,38 @@ setInterval(()=>{
 
  if(!playing) return;
 
- difficulty += 0.002; // faster ramp
+ difficulty += 0.001;
 
- // more spawns over time
- if(Math.random() < 0.2 + difficulty*0.03) spawn();
+ if(Math.random() < 0.15 + difficulty*0.02) spawn();
 
  hearts.forEach(h=>{
    h.y += h.speed;
    h.style.top = h.y+"px";
 
-   let px=player.offsetLeft;
-   let py=player.offsetTop;
+   let px = player.offsetLeft;
+   let py = player.offsetTop;
 
-   let hitRange = (h.type==="bad") ? 40 : 30; // black harder to avoid
+   if(Math.abs(px-h.x)<30 && Math.abs(py-h.y)<30){
 
-   if(Math.abs(px-h.x)<hitRange && Math.abs(py-h.y)<hitRange){
+     if(h.type==="good"){
+       time += 1;
+       beep(500,0.08);
+     }
 
-     if(h.type==="good"){ time+=1; beep(500,0.07); }
-     if(h.type==="green"){ time+=2; beep(700,0.07); } // nerfed slightly
-     if(h.type==="power"){ time+=8; beep(900,0.1); }  // nerfed slightly
-     if(h.type==="bad"){ time-=12; beep(180,0.15); }  // harsher
+     if(h.type==="green"){
+       time += 2;
+       beep(650,0.08);
+     }
+
+     if(h.type==="power"){
+       time += 10;
+       beep(900,0.12);
+     }
+
+     if(h.type==="bad"){
+       time -= 8;
+       beep(200,0.15);
+     }
 
      h.remove();
    }
@@ -143,12 +166,13 @@ setInterval(()=>{
 
  hearts = hearts.filter(h=>h.isConnected);
 
- // faster drain
- time -= 0.06 + difficulty*0.02;
+ // time drain
+ time -= 0.04 + difficulty*0.01;
 
- if(time<=0){
+ if(time <= 0){
    playing=false;
-   document.getElementById("centerMsg").innerText="💀 Game Over — Tap to retry";
+   document.getElementById("centerMsg").innerText =
+     "💀 Game Over — Tap to retry";
  }
 
  document.getElementById("ui").innerText =
