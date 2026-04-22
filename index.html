@@ -20,6 +20,7 @@ body { margin:0; background:#020617; overflow:hidden; font-family:sans-serif; co
  text-align:center;
  font-size:28px;
  transform:translateY(-50%);
+ white-space:pre-line;
 }
 
 .heart { position:absolute; font-size:26px; }
@@ -46,6 +47,10 @@ let time = 15;
 let playing = false;
 let difficulty = 1;
 
+// NEW: score tracking
+let survivalTime = 0;
+let bestTime = localStorage.getItem("bestTime") || 0;
+
 // AUDIO
 let ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -69,6 +74,7 @@ function start(){
  playing = true;
  time = 15;
  difficulty = 1;
+ survivalTime = 0;
 
  hearts.forEach(h=>h.remove());
  hearts=[];
@@ -88,7 +94,7 @@ function move(e){
  player.style.top = y + "px";
 }
 
-// spawn (FINAL CLEAN COLORS)
+// spawn
 function spawn(){
  let h = document.createElement("div");
  h.className = "heart";
@@ -158,13 +164,24 @@ setInterval(()=>{
 
  hearts = hearts.filter(h=>h.isConnected);
 
+ // track survival time
+ survivalTime += 0.03;
+
  // time drain
  time -= 0.04 + difficulty*0.01;
 
  if(time <= 0){
    playing=false;
+
+   let finalTime = survivalTime.toFixed(1);
+
+   if(finalTime > bestTime){
+     bestTime = finalTime;
+     localStorage.setItem("bestTime", bestTime);
+   }
+
    document.getElementById("centerMsg").innerText =
-     "💀 Game Over — Tap to retry";
+     "💀 Survived: " + finalTime + "s\n🏆 Best: " + bestTime + "s\nTap to retry";
  }
 
  document.getElementById("ui").innerText =
