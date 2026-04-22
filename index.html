@@ -54,49 +54,54 @@ const ctx = c.getContext("2d");
 c.width = innerWidth;
 c.height = innerHeight;
 
-const size = 15;
+const size = 19;
 const cell = Math.min(c.width,c.height)/size;
 
+// simplified classic-style maze
 let map = [
-[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-[1,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
-[1,0,1,1,1,0,1,0,1,1,1,1,1,0,1],
-[1,0,0,0,1,0,0,0,0,0,0,0,1,0,1],
-[1,1,1,0,1,1,1,1,1,1,1,0,1,0,1],
-[1,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
-[1,0,1,1,1,1,1,1,1,0,1,1,1,0,1],
-[1,0,0,0,0,0,0,0,1,0,0,0,1,0,1],
-[1,1,1,1,1,1,1,0,1,1,1,0,1,0,1],
-[1,0,0,0,0,0,1,0,0,0,1,0,0,0,1],
-[1,0,1,1,1,0,1,1,1,0,1,1,1,0,1],
-[1,0,0,0,1,0,0,0,1,0,0,0,1,0,1],
-[1,1,1,0,1,1,1,0,1,1,1,0,1,0,1],
-[1,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
-[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+[1,2,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,2,1],
+[1,0,1,1,0,1,0,1,0,1,0,1,0,1,0,1,1,0,1],
+[1,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,1],
+[1,0,1,1,0,1,1,1,1,1,1,1,1,1,0,1,1,0,1],
+[1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1],
+[1,1,1,1,0,1,1,0,0,0,0,0,1,1,0,1,1,1,1],
+[1,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,1],
+[1,0,1,1,0,1,0,1,1,9,1,1,0,1,0,1,1,0,1],
+[0,0,0,0,0,0,0,1,9,9,9,1,0,0,0,0,0,0,0],
+[1,0,1,1,0,1,0,1,1,9,1,1,0,1,0,1,1,0,1],
+[1,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,1],
+[1,1,1,1,0,1,1,0,0,0,0,0,1,1,0,1,1,1,1],
+[1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1],
+[1,0,1,1,0,1,1,1,1,1,1,1,1,1,0,1,1,0,1],
+[1,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,1],
+[1,0,1,1,0,1,0,1,0,1,0,1,0,1,0,1,1,0,1],
+[1,2,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,2,1],
+[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
 ];
 
-let player = {x:1,y:1};
-let dir = {x:0,y:0};
-
+let player = {x:9,y:15,dir:{x:0,y:0},next:{x:0,y:0}};
 let ghosts = [
- {x:13,y:1,dx:0,dy:0},
- {x:13,y:13,dx:0,dy:0}
+ {x:9,y:9,color:"red"},
+ {x:8,y:9,color:"pink"},
+ {x:10,y:9,color:"cyan"},
+ {x:9,y:8,color:"orange"}
 ];
 
 let pellets = [];
-for(let y=0;y<size;y++){
- for(let x=0;x<size;x++){
-   if(map[y][x]===0) pellets.push({x,y});
- }
-}
+map.forEach((row,y)=>{
+ row.forEach((v,x)=>{
+   if(v===0||v===2) pellets.push({x,y,power:v===2});
+ });
+});
 
-let score = 0;
-let started=false;
+let score=0;
+let power=false;
+let powerTimer=0;
 
 // joystick
 const joyDiv=document.getElementById("joy");
 const stick=document.getElementById("stick");
-
 let joy={x:0,y:0};
 
 joyDiv.ontouchmove=e=>{
@@ -118,7 +123,8 @@ joyDiv.ontouchend=()=>{
  stick.style.top="35px";
 };
 
-// start
+// start music
+let started=false;
 document.body.addEventListener("touchstart",()=>{
  if(!started){
    started=true;
@@ -128,69 +134,90 @@ document.body.addEventListener("touchstart",()=>{
 },{once:true});
 
 // movement
+function canMove(x,y){
+ return map[y] && map[y][x]!==1;
+}
+
 function update(){
 
  if(!started) return;
 
- if(Math.abs(joy.x) > Math.abs(joy.y)){
-   dir = {x: joy.x>0?1:-1, y:0};
+ // joystick direction
+ if(Math.abs(joy.x)>Math.abs(joy.y)){
+   player.next={x:joy.x>0?1:-1,y:0};
  }else if(Math.abs(joy.y)>0.2){
-   dir = {x:0, y: joy.y>0?1:-1};
+   player.next={x:0,y:joy.y>0?1:-1};
  }
 
- let nx = player.x + dir.x;
- let ny = player.y + dir.y;
-
- if(map[ny][nx]===0){
-   player.x = nx;
-   player.y = ny;
+ if(canMove(player.x+player.next.x, player.y+player.next.y)){
+   player.dir=player.next;
  }
+
+ if(canMove(player.x+player.dir.x, player.y+player.dir.y)){
+   player.x+=player.dir.x;
+   player.y+=player.dir.y;
+ }
+
+ // wrap
+ if(player.x<0) player.x=size-1;
+ if(player.x>=size) player.x=0;
 
  // pellets
  pellets = pellets.filter(p=>{
    if(p.x===player.x && p.y===player.y){
-     score++;
+     score += p.power?50:10;
+     if(p.power){
+       power=true;
+       powerTimer=200;
+     }
      return false;
    }
    return true;
  });
 
- // 👻 ghost movement (simple + stable)
+ if(power){
+   powerTimer--;
+   if(powerTimer<=0) power=false;
+ }
+
+ // ghosts
  ghosts.forEach(g=>{
-   let options = [
-     {x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}
-   ].filter(d=> map[g.y+d.y][g.x+d.x]===0);
+   let dirs=[[1,0],[-1,0],[0,1],[0,-1]]
+    .filter(d=>canMove(g.x+d[0],g.y+d[1]));
 
-   // slight chase bias
-   options.sort((a,b)=>{
-     let da = Math.abs((g.x+a.x)-player.x)+Math.abs((g.y+a.y)-player.y);
-     let db = Math.abs((g.x+b.x)-player.x)+Math.abs((g.y+b.y)-player.y);
-     return da-db;
-   });
+   let best = dirs.sort((a,b)=>{
+     let da=Math.abs(g.x+a[0]-player.x)+Math.abs(g.y+a[1]-player.y);
+     let db=Math.abs(g.x+b[0]-player.x)+Math.abs(g.y+b[1]-player.y);
+     return power?db-da:da-db;
+   })[0];
 
-   let move = options[Math.floor(Math.random()*2)];
-   if(move){
-     g.x += move.x;
-     g.y += move.y;
+   if(best){
+     g.x+=best[0];
+     g.y+=best[1];
    }
 
-   // collision with player
+   // collision
    if(g.x===player.x && g.y===player.y){
-     player = {x:1,y:1};
-     score = Math.max(0, score-5);
+     if(power){
+       g.x=9; g.y=9;
+       score+=200;
+     }else{
+       player.x=9; player.y=15;
+       score=Math.max(0,score-100);
+     }
    }
  });
 }
 
-// draw heart
-function drawHeart(x,y,size,color){
+// heart draw
+function heart(x,y,s,color){
  ctx.fillStyle=color;
  ctx.beginPath();
  ctx.moveTo(x,y);
- ctx.bezierCurveTo(x,y-size/2,x-size,y-size/2,x-size,y);
- ctx.bezierCurveTo(x-size,y+size/2,x,y+size,x,y+size);
- ctx.bezierCurveTo(x,y+size,x+size,y+size/2,x+size,y);
- ctx.bezierCurveTo(x+size,y-size/2,x,y-size/2,x,y);
+ ctx.bezierCurveTo(x,y-s/2,x-s,y-s/2,x-s,y);
+ ctx.bezierCurveTo(x-s,y+s/2,x,y+s,x,y+s);
+ ctx.bezierCurveTo(x,y+s,x+s,y+s/2,x+s,y);
+ ctx.bezierCurveTo(x+s,y-s/2,x,y-s/2,x,y);
  ctx.fill();
 }
 
@@ -209,14 +236,14 @@ function draw(){
  }
 
  pellets.forEach(p=>{
-   drawHeart(p.x*cell+cell/2,p.y*cell+cell/2,3,"pink");
+   heart(p.x*cell+cell/2,p.y*cell+cell/2,p.power?6:3,"white");
  });
 
  ghosts.forEach(g=>{
-   drawHeart(g.x*cell+cell/2,g.y*cell+cell/2,cell/4,"purple");
+   heart(g.x*cell+cell/2,g.y*cell+cell/2,cell/4,power?"blue":g.color);
  });
 
- drawHeart(player.x*cell+cell/2,player.y*cell+cell/2,cell/4,"red");
+ heart(player.x*cell+cell/2,player.y*cell+cell/2,cell/4,"red");
 
  document.getElementById("ui").innerText="Score: "+score;
 }
