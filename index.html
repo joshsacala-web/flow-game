@@ -6,15 +6,6 @@
 body { margin:0; background:black; overflow:hidden; }
 canvas { display:block; }
 
-#ui{
- position:fixed;
- top:10px;
- width:100%;
- text-align:center;
- color:white;
- font-family:sans-serif;
-}
-
 #joy{
  position:fixed;
  bottom:40px;
@@ -34,11 +25,39 @@ canvas { display:block; }
  left:35px;
  top:35px;
 }
+
+#ui{
+ position:fixed;
+ top:10px;
+ width:100%;
+ text-align:center;
+ color:white;
+ font-family:sans-serif;
+ font-size:18px;
+}
+
+#end{
+ position:fixed;
+ top:50%;
+ left:50%;
+ transform:translate(-50%,-50%);
+ color:white;
+ font-family:sans-serif;
+ text-align:center;
+ display:none;
+}
+button{
+ padding:10px 20px;
+ font-size:18px;
+ margin-top:10px;
+}
 </style>
 </head>
 <body>
 
-<div id="ui">Tap to Start</div>
+<div id="ui">Time: 0.0s</div>
+<div id="end"></div>
+
 <canvas id="c"></canvas>
 <div id="joy"><div id="stick"></div></div>
 
@@ -49,45 +68,24 @@ const ctx = c.getContext("2d");
 c.width = innerWidth;
 c.height = innerHeight;
 
-const size = 15;
-const cell = Math.min(c.width,c.height)/size;
+let startTime = Date.now();
+let finished = false;
 
-// SIMPLE CLEAN MAP
-let map = [
-[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-[1,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
-[1,0,1,1,1,0,1,0,1,1,1,1,1,0,1],
-[1,0,0,0,1,0,0,0,0,0,0,0,1,0,1],
-[1,1,1,0,1,1,1,1,1,1,1,0,1,0,1],
-[1,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
-[1,0,1,1,1,1,1,1,1,0,1,1,1,0,1],
-[1,0,0,0,0,0,0,0,1,0,0,0,1,0,1],
-[1,1,1,1,1,1,1,0,1,1,1,0,1,0,1],
-[1,0,0,0,0,0,1,0,0,0,1,0,0,0,1],
-[1,0,1,1,1,0,1,1,1,0,1,1,1,0,1],
-[1,0,0,0,1,0,0,0,1,0,0,0,1,0,1],
-[1,1,1,0,1,1,1,0,1,1,1,0,1,0,1],
-[1,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
-[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+let player = {x:120,y:120,size:10};
+let spawn = {x:120,y:120};
+let joy={x:0,y:0};
+
+// finish
+let finish = {x:420,y:520};
+
+// checkpoints
+let checkpoints = [
+ {x:200,y:140,hit:false},
+ {x:360,y:260,hit:false},
+ {x:260,y:420,hit:false}
 ];
 
-let player = {x:1,y:1,dir:{x:0,y:0},next:{x:0,y:0}};
-let ghosts = [
- {x:13,y:1,color:"pink"},
- {x:13,y:13,color:"cyan"}
-];
-
-let pellets=[];
-for(let y=0;y<size;y++){
- for(let x=0;x<size;x++){
-   if(map[y][x]===0) pellets.push({x,y});
- }
-}
-
-let score=0;
-let started=false;
-
-// 🎮 joystick (IMMEDIATE RESPONSE)
+// joystick
 const joyDiv=document.getElementById("joy");
 const stick=document.getElementById("stick");
 
@@ -98,95 +96,102 @@ joyDiv.ontouchmove=e=>{
  let dy=t.clientY-(r.top+60);
  let d=Math.hypot(dx,dy);
  if(d>40){ dx*=40/d; dy*=40/d; }
-
  stick.style.left=(dx+35)+"px";
  stick.style.top=(dy+35)+"px";
-
- // 🔥 instant direction (no delay buffer issue)
- if(Math.abs(dx)>Math.abs(dy)){
-   player.next={x:dx>0?1:-1,y:0};
- }else{
-   player.next={x:0,y:dy>0?1:-1};
- }
+ joy.x=dx/40;
+ joy.y=dy/40;
 };
 
 joyDiv.ontouchend=()=>{
+ joy.x=0; joy.y=0;
  stick.style.left="35px";
  stick.style.top="35px";
 };
 
-// start
-document.body.addEventListener("touchstart",()=>{
- if(!started){
-   started=true;
-   document.getElementById("ui").innerText="";
- }
-},{once:true});
+// maze
+let walls = [
+ {x:40,y:40,w:440,h:20},
+ {x:40,y:40,w:20,h:520},
+ {x:40,y:540,w:440,h:20},
+ {x:460,y:40,w:20,h:520},
 
-function canMove(x,y){
- return map[y] && map[y][x]===0;
+ {x:120,y:120,w:300,h:20},
+ {x:120,y:120,w:20,h:200},
+ {x:120,y:300,w:250,h:20},
+ {x:350,y:200,w:20,h:220},
+ {x:200,y:200,w:180,h:20},
+ {x:200,y:200,w:20,h:180},
+ {x:200,y:360,w:200,h:20},
+];
+
+// collision
+function collides(nx,ny){
+ let r=player.size;
+ for(let w of walls){
+   if(nx+r>w.x && nx-r<w.x+w.w &&
+      ny+r>w.y && ny-r<w.y+w.h){
+     return true;
+   }
+ }
+ return false;
 }
 
-// 🔥 GAME SPEED CONTROL
-let tick=0;
-let speed=8; // higher = slower
-
+// update
 function update(){
+ if(finished) return;
 
- if(!started) return;
+ let speed=2.8;
 
- tick++;
- if(tick % speed !== 0) return;
+ let nx = player.x + joy.x*speed;
+ let ny = player.y + joy.y*speed;
 
- // smooth direction switching
- if(canMove(player.x+player.next.x,player.y+player.next.y)){
-   player.dir = player.next;
- }
+ if(!collides(nx,player.y)) player.x=nx;
+ if(!collides(player.x,ny)) player.y=ny;
 
- if(canMove(player.x+player.dir.x,player.y+player.dir.y)){
-   player.x+=player.dir.x;
-   player.y+=player.dir.y;
- }
-
- // pellets
- pellets = pellets.filter(p=>{
-   if(p.x===player.x && p.y===player.y){
-     score++;
-     return false;
-   }
-   return true;
- });
-
- // 👻 ghosts always move
- ghosts.forEach(g=>{
-   let dirs=[[1,0],[-1,0],[0,1],[0,-1]]
-     .filter(d=>canMove(g.x+d[0],g.y+d[1]));
-
-   // chase but not perfect
-   dirs.sort((a,b)=>{
-     let da=Math.abs(g.x+a[0]-player.x)+Math.abs(g.y+a[1]-player.y);
-     let db=Math.abs(g.x+b[0]-player.x)+Math.abs(g.y+b[1]-player.y);
-     return da-db;
-   });
-
-   let move = dirs[Math.floor(Math.random()*Math.min(2,dirs.length))];
-   if(move){
-     g.x+=move[0];
-     g.y+=move[1];
-   }
-
-   // collision
-   if(g.x===player.x && g.y===player.y){
-     player.x=1;
-     player.y=1;
-     score=Math.max(0,score-5);
+ // checkpoints
+ checkpoints.forEach(cp=>{
+   if(!cp.hit){
+     if(Math.hypot(player.x-cp.x,player.y-cp.y)<15){
+       cp.hit=true;
+       player.size+=2;
+       spawn.x=cp.x;
+       spawn.y=cp.y;
+     }
    }
  });
+
+ // finish check
+ if(Math.hypot(player.x-finish.x,player.y-finish.y)<15){
+   finished=true;
+   showEnd();
+ }
 }
 
-// heart draw
-function heart(x,y,s,color){
- ctx.fillStyle=color;
+// rating
+function getRating(time){
+ if(time < 30) return "😌 Zen Master";
+ if(time < 60) return "🙂 Calm Flow";
+ if(time < 90) return "😅 Getting There";
+ return "😤 Chaos Mode";
+}
+
+function showEnd(){
+ let t = ((Date.now()-startTime)/1000).toFixed(1);
+ let rating = getRating(t);
+
+ let end = document.getElementById("end");
+ end.style.display="block";
+ end.innerHTML = `
+   <h2>Finished!</h2>
+   <p>Time: ${t}s</p>
+   <p>${rating}</p>
+   <button onclick="location.reload()">Play Again</button>
+ `;
+}
+
+// heart
+function heart(x,y,s){
+ ctx.fillStyle="red";
  ctx.beginPath();
  ctx.moveTo(x,y);
  ctx.bezierCurveTo(x,y-s/2,x-s,y-s/2,x-s,y);
@@ -196,30 +201,43 @@ function heart(x,y,s,color){
  ctx.fill();
 }
 
+// draw
 function draw(){
- ctx.fillStyle="black";
+ ctx.fillStyle="#020617";
  ctx.fillRect(0,0,c.width,c.height);
 
- for(let y=0;y<size;y++){
-  for(let x=0;x<size;x++){
-    if(map[y][x]===1){
-      ctx.fillStyle="#0a3d62";
-      ctx.fillRect(x*cell,y*cell,cell,cell);
-    }
-  }
+ // maze
+ ctx.shadowColor="#00aaff";
+ ctx.shadowBlur=10;
+ ctx.fillStyle="#0a3d62";
+ walls.forEach(w=>ctx.fillRect(w.x,w.y,w.w,w.h));
+ ctx.shadowBlur=0;
+
+ // checkpoints
+ checkpoints.forEach(cp=>{
+   ctx.beginPath();
+   ctx.arc(cp.x,cp.y,6,0,Math.PI*2);
+   ctx.fillStyle = cp.hit ? "#00ffcc" : "#ffd166";
+   ctx.fill();
+ });
+
+ // finish
+ ctx.beginPath();
+ ctx.arc(finish.x,finish.y,8,0,Math.PI*2);
+ ctx.fillStyle="#00ff00";
+ ctx.fill();
+
+ // player
+ ctx.shadowColor="red";
+ ctx.shadowBlur=20;
+ heart(player.x,player.y,player.size);
+ ctx.shadowBlur=0;
+
+ // timer
+ if(!finished){
+   let t=((Date.now()-startTime)/1000).toFixed(1);
+   document.getElementById("ui").innerText="Time: "+t+"s";
  }
-
- pellets.forEach(p=>{
-   heart(p.x*cell+cell/2,p.y*cell+cell/2,3,"white");
- });
-
- ghosts.forEach(g=>{
-   heart(g.x*cell+cell/2,g.y*cell+cell/2,cell/4,g.color);
- });
-
- heart(player.x*cell+cell/2,player.y*cell+cell/2,cell/4,"red");
-
- document.getElementById("ui").innerText="Score: "+score;
 }
 
 function loop(){
