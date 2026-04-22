@@ -70,6 +70,8 @@ function start(){
  playing = true;
  score = 0;
  time = 30;
+ power = 0;
+
  hearts.forEach(h=>h.remove());
  hearts=[];
 
@@ -96,11 +98,14 @@ function spawn(){
  let r = Math.random();
 
  if(r > 0.8){
-   h.type="power"; h.innerText="💛";
+   h.type="power";
+   h.innerText="💛";
  } else if(r > 0.3){
-   h.type="good"; h.innerText="❤️";
+   h.type="good";
+   h.innerText="❤️";
  } else {
-   h.type="bad"; h.innerText="💔";
+   h.type="bad";
+   h.innerHTML = "<span style='color:black; filter: drop-shadow(0 0 3px white);'>🖤</span>";
  }
 
  h.x = Math.random()*innerWidth;
