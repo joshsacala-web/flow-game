@@ -25,109 +25,25 @@ body {
 }
 
 #player {
-  font-size:32px;
-}
-</style>
-</head>
-<body>
-
-<div id="ui">Tap to Start</div>
-<div id="player" class="heart">❤️</div>
-
-<script>
-let player = document.getElementById("player");
-let hearts = [];
-let playing = false;
-let score = 0;
-
-// position player center
-player.style.left = innerWidth/2 + "px";
-player.style.top = innerHeight/2 + "px";
-
-// start
-document.body.addEventListener("click", start);
-document.body.addEventListener("touchstart", start);
-
-function start(){
-  playing = true;
-  score = 0;
-  document.getElementById("ui").innerText = "Score: 0";
-}
-
-// movement
-document.addEventListener("mousemove", move);
-document.addEventListener("touchmove", move);
-
-function move(e){
-  let x = e.touches ? e.touches[0].clientX : e.clientX;
-  let y = e.touches ? e.touches[0].clientY : e.clientY;
-
-  player.style.left = x + "px";
-  player.style.top = y + "px";
-}
-
-// spawn hearts
-function spawn(){
-  let h = document.createElement("div");
-  h.className = "heart";
-  h.innerText = Math.random() > 0.3 ? "❤️" : "💔";
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-body {
-  margin:0;
-  background:#020617;
-  overflow:hidden;
-  font-family:sans-serif;
-  color:white;
-}
-
-#ui {
-  position:fixed;
-  top:10px;
-  width:100%;
-  text-align:center;
-  font-size:20px;
-}
-
-.heart {
   position:absolute;
-  font-size:24px;
-}
-
-#player {
   font-size:32px;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-50%);
 }
 </style>
 </head>
 <body>
 
-<div id="ui">Tap to Start</div>
-<div id="player" class="heart">❤️</div>
+<div id="ui">Score: 0</div>
+<div id="player">❤️</div>
 
 <script>
 let player = document.getElementById("player");
 let hearts = [];
-let playing = false;
 let score = 0;
 
-// position player center
-player.style.left = innerWidth/2 + "px";
-player.style.top = innerHeight/2 + "px";
-
-// start
-document.body.addEventListener("click", start);
-document.body.addEventListener("touchstart", start);
-
-function start(){
-  playing = true;
-  score = 0;
-  document.getElementById("ui").innerText = "Score: 0";
-}
-
-// movement
+// movement ALWAYS works
 document.addEventListener("mousemove", move);
 document.addEventListener("touchmove", move);
 
@@ -156,12 +72,11 @@ function spawn(){
   hearts.push(h);
 }
 
-// game loop
+// LOOP ALWAYS RUNS (no start needed)
 setInterval(()=>{
 
-  if(!playing) return;
-
-  if(Math.random() < 0.1) spawn();
+  // spawn constantly
+  if(Math.random() < 0.12) spawn();
 
   hearts.forEach(h=>{
     h.y += h.speed;
@@ -170,61 +85,15 @@ setInterval(()=>{
     let px = player.offsetLeft;
     let py = player.offsetTop;
 
+    // collision
     if(Math.abs(px - h.x) < 30 && Math.abs(py - h.y) < 30){
       if(h.innerText === "❤️"){
         score++;
         document.getElementById("ui").innerText = "Score: " + score;
       } else {
-        document.getElementById("ui").innerText = "💔 " + score + " — Tap to retry";
-        playing = false;
-      }
-      h.remove();
-    }
-
-    if(h.y > innerHeight){
-      h.remove();
-    }
-  });
-
-  hearts = hearts.filter(h => h.isConnected);
-
-}, 30);
-</script>
-
-</body>
-</html>
-  h.x = Math.random()*innerWidth;
-  h.y = -20;
-  h.speed = 2 + Math.random()*2;
-
-  h.style.left = h.x + "px";
-  h.style.top = h.y + "px";
-
-  document.body.appendChild(h);
-  hearts.push(h);
-}
-
-// game loop
-setInterval(()=>{
-
-  if(!playing) return;
-
-  if(Math.random() < 0.1) spawn();
-
-  hearts.forEach(h=>{
-    h.y += h.speed;
-    h.style.top = h.y + "px";
-
-    let px = player.offsetLeft;
-    let py = player.offsetTop;
-
-    if(Math.abs(px - h.x) < 30 && Math.abs(py - h.y) < 30){
-      if(h.innerText === "❤️"){
-        score++;
-        document.getElementById("ui").innerText = "Score: " + score;
-      } else {
-        document.getElementById("ui").innerText = "💔 " + score + " — Tap to retry";
-        playing = false;
+        // reset game instantly
+        score = 0;
+        document.getElementById("ui").innerText = "💔 Game Over — Score reset";
       }
       h.remove();
     }
