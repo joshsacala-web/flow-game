@@ -3,67 +3,80 @@
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body { margin:0; background:#020617; overflow:hidden; }
-canvas { display:block; }
+body { margin:0; background:#020617; overflow:hidden; color:white; font-family:sans-serif; }
 #ui{
  position:fixed;
  top:10px;
  width:100%;
  text-align:center;
- color:white;
- font-family:sans-serif;
- font-size:20px;
+ font-size:22px;
 }
+#buttons{
+ position:fixed;
+ bottom:0;
+ width:100%;
+ display:flex;
+}
+.btn{
+ flex:1;
+ height:120px;
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ font-size:30px;
+ background:#111;
+}
+.left{ background:#1e293b; }
+.right{ background:#1e293b; }
 </style>
 </head>
 <body>
 
-<div id="ui">Tap to Start</div>
+<div id="ui">Tap LEFT or RIGHT to start</div>
 <canvas id="c"></canvas>
 
+<div id="buttons">
+  <div class="btn left">⬅️</div>
+  <div class="btn right">➡️</div>
+</div>
+
 <script>
-const c = document.getElementById("c");
-const ctx = c.getContext("2d");
+const c=document.getElementById("c");
+const ctx=c.getContext("2d");
+c.width=innerWidth;
+c.height=innerHeight;
 
-c.width = innerWidth;
-c.height = innerHeight;
+let heartY, correctSide, playing=false, score=0, speed=3;
 
-let player, enemies, score, playing;
-
-// start
-document.body.addEventListener("touchstart", startGame);
-
-function startGame(){
- player = {x:c.width/2, y:c.height/2};
- enemies = [];
- score = 0;
- playing = true;
+function start(){
+ heartY=0;
+ correctSide=Math.random()<0.5?"left":"right";
+ playing=true;
+ score=0;
+ speed=3;
 }
 
-// movement
-c.addEventListener("touchmove", e=>{
- if(!playing) return;
- player.x = e.touches[0].clientX;
- player.y = e.touches[0].clientY;
-});
+document.querySelector(".left").onclick=()=>input("left");
+document.querySelector(".right").onclick=()=>input("right");
 
-// spawn enemies
-function spawn(){
- let side = Math.floor(Math.random()*4);
- let e = {x:0,y:0};
+function input(side){
+ if(!playing){
+   start();
+   return;
+ }
 
- if(side===0){ e.x=0; e.y=Math.random()*c.height; }
- if(side===1){ e.x=c.width; e.y=Math.random()*c.height; }
- if(side===2){ e.x=Math.random()*c.width; e.y=0; }
- if(side===3){ e.x=Math.random()*c.width; e.y=c.height; }
-
- e.speed = 1.5 + score*0.02;
- enemies.push(e);
+ if(side===correctSide){
+   score++;
+   speed+=0.3;
+   heartY=0;
+   correctSide=Math.random()<0.5?"left":"right";
+ } else {
+   playing=false;
+ }
 }
 
-// heart draw
-function heart(x,y,s,color){
- ctx.fillStyle=color;
+function heart(x,y,s){
+ ctx.fillStyle="red";
  ctx.beginPath();
  ctx.moveTo(x,y);
  ctx.bezierCurveTo(x,y-s/2,x-s,y-s/2,x-s,y);
@@ -73,60 +86,45 @@ function heart(x,y,s,color){
  ctx.fill();
 }
 
-// update
-function update(){
- if(!playing) return;
-
- score += 0.02;
-
- if(Math.random()<0.03) spawn();
-
- enemies.forEach(e=>{
-   let dx = player.x - e.x;
-   let dy = player.y - e.y;
-   let d = Math.hypot(dx,dy);
-
-   e.x += dx/d * e.speed;
-   e.y += dy/d * e.speed;
-
-   if(d < 20){
-     playing = false;
-   }
- });
-}
-
-// draw
-function draw(){
+function loop(){
  ctx.fillStyle="#020617";
  ctx.fillRect(0,0,c.width,c.height);
 
- enemies.forEach(e=>{
-   heart(e.x,e.y,10,"#ff4d6d");
- });
-
- if(player){
-   ctx.shadowColor="red";
-   ctx.shadowBlur=20;
-   heart(player.x,player.y,14,"red");
-   ctx.shadowBlur=0;
- }
-
- let ui = document.getElementById("ui");
-
  if(playing){
-   ui.innerText = "Score: " + score.toFixed(1);
+   heartY+=speed;
+
+   let x=c.width/2;
+
+   // draw split
+   ctx.strokeStyle="#444";
+   ctx.lineWidth=6;
+   ctx.beginPath();
+   ctx.moveTo(x,heartY);
+   ctx.lineTo(x-80,heartY+120);
+   ctx.moveTo(x,heartY);
+   ctx.lineTo(x+80,heartY+120);
+   ctx.stroke();
+
+   heart(x,heartY,20);
+
+   // decision line
+   if(heartY>c.height-200){
+     document.getElementById("ui").innerText="Choose!";
+   } else {
+     document.getElementById("ui").innerText="Score: "+score;
+   }
+
+   // missed input
+   if(heartY>c.height){
+     playing=false;
+   }
+
  } else {
-   ui.innerText = score>0
-     ? "💔 " + score.toFixed(1) + " — Tap to retry"
-     : "Tap to Start";
+   document.getElementById("ui").innerText =
+     score>0 ? "💔 "+score+" — Tap to retry" : "Tap LEFT or RIGHT to start";
  }
 
- requestAnimationFrame(draw);
-}
-
-function loop(){
- update();
- draw();
+ requestAnimationFrame(loop);
 }
 
 loop();
