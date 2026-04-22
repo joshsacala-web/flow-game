@@ -42,10 +42,8 @@ body { margin:0; background:#020617; overflow:hidden; font-family:sans-serif; co
 <script>
 let player = document.getElementById("player");
 let hearts = [];
-let score = 0;
-let power = 0;
+let time = 20;
 let playing = false;
-let time = 30;
 
 // AUDIO
 let ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
@@ -68,9 +66,7 @@ function start(){
  if(playing) return;
 
  playing = true;
- score = 0;
- time = 30;
- power = 0;
+ time = 20;
 
  hearts.forEach(h=>h.remove());
  hearts=[];
@@ -126,8 +122,6 @@ setInterval(()=>{
 
  if(Math.random()<0.12) spawn();
 
- if(power>0) power--;
-
  hearts.forEach(h=>{
    h.y += h.speed;
    h.style.top = h.y+"px";
@@ -138,21 +132,18 @@ setInterval(()=>{
    if(Math.abs(px-h.x)<30 && Math.abs(py-h.y)<30){
 
      if(h.type==="good"){
-       score++;
+       time += 1;
        beep(500,0.1);
      }
 
      if(h.type==="power"){
-       score+=5;
-       power=90;
+       time += 10;
        beep(900,0.15);
      }
 
      if(h.type==="bad"){
-       if(power<=0){
-         score=Math.max(0,score-3);
-         beep(200,0.2);
-       }
+       time -= 10;
+       beep(200,0.2);
      }
 
      h.remove();
@@ -163,25 +154,18 @@ setInterval(()=>{
 
  hearts = hearts.filter(h=>h.isConnected);
 
- // timer
+ // timer drain
  time -= 0.03;
 
- if(time<=0){
+ if(time <= 0){
    playing=false;
    document.getElementById("centerMsg").innerText =
-     "🏁 Final Score: "+score+" — Tap to play again";
+     "💀 Survived: 0 — Tap to try again";
  }
 
  // UI
  document.getElementById("ui").innerText =
-   "Score: "+score+" | Time: "+time.toFixed(0);
-
- // power glow
- if(power>0){
-   player.style.filter="drop-shadow(0 0 15px yellow)";
- } else {
-   player.style.filter="none";
- }
+   "Time: "+Math.max(0,time.toFixed(1));
 
 },30);
 </script>
